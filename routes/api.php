@@ -8,6 +8,10 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ProviderProfileController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\Admin\AdminAnalyticsController;
+use App\Http\Controllers\Api\Admin\AdminAppointmentController;
+use App\Http\Controllers\Api\Admin\AdminProviderController;
+use App\Http\Controllers\Api\Admin\AdminUserController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -19,8 +23,10 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
 
     // ── Public ──────────────────────────────────────────────
-    Route::post('/register', [AuthController::class, 'register']);
-    Route::post('/login', [AuthController::class, 'login']);
+    // Throttled: brute-force / registration-spam protection on the two
+    // unauthenticated endpoints that accept credentials.
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:6,1');
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
 
     // Feature #2 & #6: browse/discover providers + their catalogue, no auth needed
     Route::get('/providers', [ProviderProfileController::class, 'index']);
@@ -69,5 +75,27 @@ Route::prefix('v1')->group(function () {
         // M-Pesa deposit
         Route::post('/appointments/{appointment}/deposit', [PaymentController::class, 'initiateDeposit']);
         Route::get('/payments/{payment}/status', [PaymentController::class, 'status']);
+
+        // ── Admin panel ───────────────────────────────────
+        Route::middleware('admin')->prefix('admin')->group(function () {
+            Route::get('/analytics/overview', [AdminAnalyticsController::class, 'overview']);
+            Route::get('/analytics/revenue', [AdminAnalyticsController::class, 'revenueSeries']);
+            Route::get('/analytics/bookings', [AdminAnalyticsController::class, 'bookingsSeries']);
+            Route::get('/analytics/user-growth', [AdminAnalyticsController::class, 'userGrowthSeries']);
+            Route::get('/analytics/top-providers', [AdminAnalyticsController::class, 'topProviders']);
+
+            Route::get('/users', [AdminUserController::class, 'index']);
+            Route::get('/users/{id}', [AdminUserController::class, 'show']);
+            Route::patch('/users/{id}/suspend', [AdminUserController::class, 'suspend']);
+            Route::patch('/users/{id}/reactivate', [AdminUserController::class, 'reactivate']);
+
+            Route::get('/providers', [AdminProviderController::class, 'index']);
+            Route::get('/providers/{providerProfile}', [AdminProviderController::class, 'show']);
+            Route::patch('/providers/{providerProfile}/verify', [AdminProviderController::class, 'verify']);
+            Route::patch('/providers/{providerProfile}/unverify', [AdminProviderController::class, 'unverify']);
+
+            Route::get('/appointments', [AdminAppointmentController::class, 'index']);
+            Route::patch('/appointments/{appointment}/cancel', [AdminAppointmentController::class, 'cancel']);
+        });
     });
 });

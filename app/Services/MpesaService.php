@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -10,6 +11,12 @@ use RuntimeException;
 class MpesaService
 {
     private string $baseUrl;
+
+    // Safaricom's sandbox can be slow; fail fast rather than hanging the request,
+    // and retry once in case of a transient blip before giving up.
+    private const TIMEOUT_SECONDS = 15;
+    private const RETRY_TIMES = 2;
+    private const RETRY_DELAY_MS = 300;
 
     public function __construct()
     {
@@ -23,10 +30,13 @@ class MpesaService
     public function getAccessToken(): string
     {
         return Cache::remember('mpesa_access_token', now()->addMinutes(55), function () {
-            $response = Http::withBasicAuth(
+            $response = $this->guardConnection(fn () => Http::withBasicAuth(
                 config('mpesa.consumer_key'),
                 config('mpesa.consumer_secret')
-            )->get("{$this->baseUrl}/oauth/v1/generate", ['grant_type' => 'client_credentials']);
+            )
+                ->timeout(self::TIMEOUT_SECONDS)
+                ->retry(self::RETRY_TIMES, self::RETRY_DELAY_MS)
+                ->get("{$this->baseUrl}/oauth/v1/generate", ['grant_type' => 'client_credentials']));
 
             if (! $response->successful()) {
                 Log::error('M-Pesa token request failed', ['response' => $response->body()]);
@@ -69,7 +79,9 @@ class MpesaService
         $password = base64_encode($shortcode . $passkey . $timestamp);
         $phone = $this->normalizePhone($phone);
 
-        $response = Http::withToken($this->getAccessToken())
+        $response = $this->guardConnection(fn () => Http::withToken($this->getAccessToken())
+            ->timeout(self::TIMEOUT_SECONDS)
+            ->retry(self::RETRY_TIMES, self::RETRY_DELAY_MS)
             ->post("{$this->baseUrl}/mpesa/stkpush/v1/processrequest", [
                 'BusinessShortCode' => $shortcode,
                 'Password' => $password,
@@ -82,13 +94,13 @@ class MpesaService
                 'CallBackURL' => config('mpesa.callback_url'),
                 'AccountReference' => $accountReference,
                 'TransactionDesc' => $description,
-            ]);
+            ]));
 
         $body = $response->json();
 
         if (! $response->successful() || ($body['ResponseCode'] ?? null) !== '0') {
             Log::error('M-Pesa STK push failed', ['response' => $body]);
-            throw new RuntimeException($body['errorMessage'] ?? 'Failed to initiate M-Pesa payment');
+            throw new RuntimeException($body['errorMessage'] ?? 'Failed to initiate M-Pesa payment. Please try again.');
         }
 
         return [
@@ -106,14 +118,31 @@ class MpesaService
         $timestamp = now()->format('YmdHis');
         $password = base64_encode($shortcode . $passkey . $timestamp);
 
-        $response = Http::withToken($this->getAccessToken())
+        $response = $this->guardConnection(fn () => Http::withToken($this->getAccessToken())
+            ->timeout(self::TIMEOUT_SECONDS)
+            ->retry(self::RETRY_TIMES, self::RETRY_DELAY_MS)
             ->post("{$this->baseUrl}/mpesa/stkpushquery/v1/query", [
                 'BusinessShortCode' => $shortcode,
                 'Password' => $password,
                 'Timestamp' => $timestamp,
                 'CheckoutRequestID' => $checkoutRequestId,
-            ]);
+            ]));
 
-        return $response->json();
+        return $response->json() ?? [];
+    }
+
+    /**
+     * Wraps an HTTP call so a genuinely unreachable Safaricom endpoint (DNS failure,
+     * timeout, connection refused) surfaces as the same friendly RuntimeException
+     * every caller already expects, instead of an uncaught ConnectionException.
+     */
+    private function guardConnection(\Closure $call)
+    {
+        try {
+            return $call();
+        } catch (ConnectionException $e) {
+            Log::error('M-Pesa connection failed', ['error' => $e->getMessage()]);
+            throw new RuntimeException('Could not reach M-Pesa right now. Please try again in a moment.');
+        }
     }
 }
