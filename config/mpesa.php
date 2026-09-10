@@ -19,5 +19,11 @@ return [
     'callback_url' => env('MPESA_CALLBACK_URL'),
 
     // What fraction of a service's price is required as deposit (e.g. 0.3 = 30%)
+    // Currently unused — the booking deposit flow is disabled in favor of the
+    // provider subscription fee below. Left in place in case deposits are re-enabled.
     'default_deposit_rate' => (float) env('MPESA_DEPOSIT_RATE', 0.3),
+
+    // Flat monthly fee a provider pays to be listed and accept bookings.
+    'provider_subscription_fee' => (float) env('MPESA_PROVIDER_SUBSCRIPTION_FEE', 1),
+    'provider_subscription_days' => (int) env('MPESA_PROVIDER_SUBSCRIPTION_DAYS', 30),
 ];

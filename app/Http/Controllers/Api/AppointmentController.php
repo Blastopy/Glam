@@ -46,6 +46,7 @@ class AppointmentController extends Controller
         $service = Service::with('providerProfile')->findOrFail($validated['service_id']);
 
         abort_if(! $service->providerProfile->is_open, 422, 'This provider is currently closed');
+        abort_if(! $service->providerProfile->is_subscription_active, 422, 'This provider is not currently accepting bookings.');
 
         // Wrapped in a transaction with a row lock on the provider's same-day appointments
         // so two clients booking the same slot at the same instant can't both succeed —

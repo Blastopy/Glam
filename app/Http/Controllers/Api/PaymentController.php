@@ -6,10 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Events\DepositConfirmed;
 use App\Models\Appointment;
 use App\Models\Payment;
+use App\Models\ProviderSubscriptionPayment;
 use App\Services\MpesaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use RuntimeException;
 
 class PaymentController extends Controller
 {
@@ -18,64 +18,23 @@ class PaymentController extends Controller
     }
 
     /**
-     * Feature: client pays a deposit to secure a booking.
-     * Triggers an STK push — client approves on their phone, result arrives via callback().
+     * Booking deposits are currently disabled — clients book without paying up
+     * front, and providers confirm manually instead. The endpoint and its
+     * underlying model/table are left in place (not deleted) in case this is
+     * re-enabled later; it just refuses to start a new charge for now.
      */
     public function initiateDeposit(Request $request, Appointment $appointment)
     {
-        abort_unless($appointment->client_id === $request->user()->id, 403);
-        abort_if($appointment->is_deposit_paid, 422, 'Deposit already paid for this appointment');
-
-        $validated = $request->validate([
-            'phone' => 'required|string|min:9',
-        ]);
-
-        $depositAmount = $appointment->deposit_amount > 0
-            ? $appointment->deposit_amount
-            : round($appointment->price_at_booking * config('mpesa.default_deposit_rate'), 2);
-
-        $payment = Payment::create([
-            'appointment_id' => $appointment->id,
-            'client_id' => $appointment->client_id,
-            'type' => 'deposit',
-            'amount' => $depositAmount,
-            'phone' => $this->mpesa->normalizePhone($validated['phone']),
-            'status' => 'pending',
-        ]);
-
-        try {
-            $result = $this->mpesa->stkPush(
-                phone: $validated['phone'],
-                amount: $depositAmount,
-                accountReference: 'APPT-' . $appointment->id,
-                description: 'Booking deposit'
-            );
-        } catch (RuntimeException $e) {
-            $payment->update(['status' => 'failed', 'result_desc' => $e->getMessage()]);
-
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
-
-        $payment->update([
-            'merchant_request_id' => $result['merchant_request_id'],
-            'checkout_request_id' => $result['checkout_request_id'],
-        ]);
-
-        // Also stamp the deposit amount onto the appointment if it wasn't set yet
-        if ($appointment->deposit_amount == 0) {
-            $appointment->update(['deposit_amount' => $depositAmount]);
-        }
-
         return response()->json([
-            'message' => 'Check your phone to approve the M-Pesa prompt',
-            'payment_id' => $payment->id,
-            'checkout_request_id' => $result['checkout_request_id'],
-        ]);
+            'message' => 'Booking deposits are currently disabled — no payment is needed to book.',
+        ], 422);
     }
 
     /**
      * Public webhook — Safaricom calls this asynchronously with the result.
      * No auth middleware; verify by matching CheckoutRequestID instead.
+     * Handles both appointment-deposit payments and provider subscription
+     * payments, since both flows share this one callback URL.
      */
     public function callback(Request $request)
     {
@@ -86,14 +45,7 @@ class PaymentController extends Controller
             return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Ignored — malformed payload']);
         }
 
-        $payment = Payment::where('checkout_request_id', $payload['CheckoutRequestID'])->first();
-
-        if (! $payment) {
-            Log::warning('M-Pesa callback for unknown payment', ['checkout_request_id' => $payload['CheckoutRequestID']]);
-
-            return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Ignored — unknown transaction']);
-        }
-
+        $checkoutRequestId = $payload['CheckoutRequestID'];
         $resultCode = $payload['ResultCode'];
         $success = $resultCode === 0;
 
@@ -106,35 +58,63 @@ class PaymentController extends Controller
             }
         }
 
-        $payment->update([
-            'status' => $success ? 'successful' : 'failed',
-            'result_code' => $resultCode,
-            'result_desc' => $payload['ResultDesc'] ?? null,
-            'mpesa_receipt_number' => $receipt,
-            'paid_at' => $success ? now() : null,
-            'raw_callback' => $payload,
-        ]);
+        $payment = Payment::where('checkout_request_id', $checkoutRequestId)->first();
 
-        if ($success && $payment->type === 'deposit') {
-            $payment->appointment->update([
-                'is_deposit_paid' => true,
-                'status' => 'confirmed',
+        if ($payment) {
+            $payment->update([
+                'status' => $success ? 'successful' : 'failed',
+                'result_code' => $resultCode,
+                'result_desc' => $payload['ResultDesc'] ?? null,
+                'mpesa_receipt_number' => $receipt,
+                'paid_at' => $success ? now() : null,
+                'raw_callback' => $payload,
             ]);
 
-            broadcast(new DepositConfirmed($payment));
+            if ($success && $payment->type === 'deposit') {
+                $payment->appointment->update([
+                    'is_deposit_paid' => true,
+                    'status' => 'confirmed',
+                ]);
+
+                broadcast(new DepositConfirmed($payment));
+            }
+
+            return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
         }
 
-        // Safaricom expects this exact shape to stop retrying the callback
-        return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
+        $subscriptionPayment = ProviderSubscriptionPayment::where('checkout_request_id', $checkoutRequestId)->first();
+
+        if ($subscriptionPayment) {
+            if ($success) {
+                $subscriptionPayment->update([
+                    'result_code' => $resultCode,
+                    'result_desc' => $payload['ResultDesc'] ?? null,
+                    'mpesa_receipt_number' => $receipt,
+                    'raw_callback' => $payload,
+                ]);
+                ProviderSubscriptionController::markSuccessful($subscriptionPayment);
+            } else {
+                $subscriptionPayment->update([
+                    'status' => 'failed',
+                    'result_code' => $resultCode,
+                    'result_desc' => $payload['ResultDesc'] ?? null,
+                    'raw_callback' => $payload,
+                ]);
+            }
+
+            return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
+        }
+
+        Log::warning('M-Pesa callback for unknown payment', ['checkout_request_id' => $checkoutRequestId]);
+
+        return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Ignored — unknown transaction']);
     }
 
-    /** Client-side polling fallback while waiting on the async callback. */
+    /** Client-side polling fallback while waiting on the async callback (appointment deposits only — currently unused since deposits are disabled). */
     public function status(Request $request, Payment $payment)
     {
         abort_unless($payment->client_id === $request->user()->id, 403);
 
-        // If still pending after a few seconds, actively query Safaricom rather than
-        // leaving the user staring at a spinner if the callback got delayed.
         if ($payment->status === 'pending' && $payment->checkout_request_id) {
             $query = $this->mpesa->stkQuery($payment->checkout_request_id);
 

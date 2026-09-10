@@ -16,6 +16,7 @@ class ProviderProfileController extends Controller
     public function index(Request $request)
     {
         $query = ProviderProfile::query()
+            ->subscriptionActive() // only providers who've paid the monthly fee are discoverable
             ->with(['services' => fn ($q) => $q->where('is_active', true), 'user:id,name,avatar'])
             ->withCount('appointments');
 

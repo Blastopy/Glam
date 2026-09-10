@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClientBookController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\ProviderSubscriptionController;
 use App\Http\Controllers\Api\ProviderProfileController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ServiceController;
@@ -27,6 +28,7 @@ Route::prefix('v1')->group(function () {
     // unauthenticated endpoints that accept credentials.
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:6,1');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
+    Route::post('/auth/google', [AuthController::class, 'google'])->middleware('throttle:10,1');
 
     // Feature #2 & #6: browse/discover providers + their catalogue, no auth needed
     Route::get('/providers', [ProviderProfileController::class, 'index']);
@@ -72,9 +74,14 @@ Route::prefix('v1')->group(function () {
         // Reviews
         Route::post('/appointments/{appointment}/review', [ReviewController::class, 'store']);
 
-        // M-Pesa deposit
+        // M-Pesa deposit — currently disabled, see PaymentController::initiateDeposit
         Route::post('/appointments/{appointment}/deposit', [PaymentController::class, 'initiateDeposit']);
         Route::get('/payments/{payment}/status', [PaymentController::class, 'status']);
+
+        // Provider monthly subscription fee (KES 70) — required to be listed and bookable
+        Route::get('/provider/subscription', [ProviderSubscriptionController::class, 'status']);
+        Route::post('/provider/subscription/pay', [ProviderSubscriptionController::class, 'initiate']);
+        Route::get('/provider/subscription/{payment}/poll', [ProviderSubscriptionController::class, 'poll']);
 
         // ── Admin panel ───────────────────────────────────
         Route::middleware('admin')->prefix('admin')->group(function () {

@@ -35,7 +35,7 @@ class MpesaService
                 config('mpesa.consumer_secret')
             )
                 ->timeout(self::TIMEOUT_SECONDS)
-                ->retry(self::RETRY_TIMES, self::RETRY_DELAY_MS)
+                // ->retry(self::RETRY_TIMES, self::RETRY_DELAY_MS)
                 ->get("{$this->baseUrl}/oauth/v1/generate", ['grant_type' => 'client_credentials']));
 
             if (! $response->successful()) {

@@ -15,8 +15,12 @@ class ProviderProfile extends Model
     protected $fillable = [
         'user_id', 'business_name', 'provider_type', 'bio', 'address',
         'latitude', 'longitude', 'cover_image', 'is_open', 'closed_reason',
-        'business_hours', 'is_verified',
+        'business_hours', 'is_verified', 'subscription_expires_at',
     ];
+
+    // Ships alongside every JSON response so the frontend can gate provider
+    // features (dashboard access, going live) without a separate lookup.
+    protected $appends = ['is_subscription_active'];
 
     protected function casts(): array
     {
@@ -27,7 +31,23 @@ class ProviderProfile extends Model
             'is_verified' => 'boolean',
             'business_hours' => 'array',
             'average_rating' => 'decimal:2',
+            'subscription_expires_at' => 'datetime',
         ];
+    }
+
+    /**
+     * A provider is "live" — bookable and visible to clients — only while
+     * this holds. KES 70/month, enforced in ProviderProfileController@index
+     * (discovery) and AppointmentController@store (booking).
+     */
+    public function getIsSubscriptionActiveAttribute(): bool
+    {
+        return $this->subscription_expires_at !== null && $this->subscription_expires_at->isFuture();
+    }
+
+    public function subscriptionPayments(): HasMany
+    {
+        return $this->hasMany(ProviderSubscriptionPayment::class);
     }
 
     // ── Relationships ─────────────────────────────────────
@@ -70,6 +90,12 @@ class ProviderProfile extends Model
     public function scopeOfType($query, string $type)
     {
         return $query->where('provider_type', $type);
+    }
+
+    /** Only providers with a currently-paid-up subscription — gates public discovery. */
+    public function scopeSubscriptionActive($query)
+    {
+        return $query->whereNotNull('subscription_expires_at')->where('subscription_expires_at', '>', now());
     }
 
     /**

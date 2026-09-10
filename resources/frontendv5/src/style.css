@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-paper text-ink font-sans;
+}
+
+/* Horizontal scroll strips (trending styles) — usable scrollbar, not hidden entirely */
+.scroll-strip {
+  scrollbar-width: thin;
+  scrollbar-color: theme('colors.sage.300') transparent;
+}
+.scroll-strip::-webkit-scrollbar {
+  height: 6px;
+}
+.scroll-strip::-webkit-scrollbar-thumb {
+  background-color: theme('colors.sage.300');
+  border-radius: 999px;
+}
