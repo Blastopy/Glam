@@ -5,9 +5,16 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClientBookController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\ProviderSubscriptionController;
 use App\Http\Controllers\Api\ProviderProfileController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\SystemSettingsController;
+use App\Http\Controllers\Api\Admin\AdminAnalyticsController;
+use App\Http\Controllers\Api\Admin\AdminAppointmentController;
+use App\Http\Controllers\Api\Admin\AdminProviderController;
+use App\Http\Controllers\Api\Admin\AdminSettingsController;
+use App\Http\Controllers\Api\Admin\AdminUserController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -19,13 +26,21 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
 
     // ── Public ──────────────────────────────────────────────
-    Route::post('/register', [AuthController::class, 'register']);
-    Route::post('/login', [AuthController::class, 'login']);
+    // Throttled: brute-force / registration-spam protection on the two
+    // unauthenticated endpoints that accept credentials.
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:6,1');
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
+    Route::post('/auth/google', [AuthController::class, 'google'])->middleware('throttle:10,1');
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
+    Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1');
 
     // Feature #2 & #6: browse/discover providers + their catalogue, no auth needed
     Route::get('/providers', [ProviderProfileController::class, 'index']);
     Route::get('/providers/{providerProfile}', [ProviderProfileController::class, 'show']);
     Route::get('/providers/{providerProfileId}/services', [ServiceController::class, 'index']);
+
+    // Lets the frontend know whether the payments system is currently switched on
+    Route::get('/system-settings', [SystemSettingsController::class, 'status']);
 
     // M-Pesa callback — Safaricom hits this server-to-server, must stay outside auth
     // and outside CSRF/VerifyCsrfToken (api group already excludes CSRF by default).
@@ -66,8 +81,42 @@ Route::prefix('v1')->group(function () {
         // Reviews
         Route::post('/appointments/{appointment}/review', [ReviewController::class, 'store']);
 
-        // M-Pesa deposit
+        // M-Pesa deposit — currently disabled, see PaymentController::initiateDeposit
         Route::post('/appointments/{appointment}/deposit', [PaymentController::class, 'initiateDeposit']);
         Route::get('/payments/{payment}/status', [PaymentController::class, 'status']);
+
+        // Provider monthly subscription fee (KES 70) — required to be listed and bookable,
+        // unless the admin has switched off payments system-wide (see AdminSettingsController)
+        Route::get('/provider/subscription', [ProviderSubscriptionController::class, 'status']);
+        Route::post('/provider/subscription/pay', [ProviderSubscriptionController::class, 'initiate']);
+        Route::get('/provider/subscription/{payment}/poll', [ProviderSubscriptionController::class, 'poll']);
+
+        // ── Admin panel ───────────────────────────────────
+        Route::middleware('admin')->prefix('admin')->group(function () {
+            Route::get('/analytics/overview', [AdminAnalyticsController::class, 'overview']);
+            Route::get('/analytics/revenue', [AdminAnalyticsController::class, 'revenueSeries']);
+            Route::get('/analytics/bookings', [AdminAnalyticsController::class, 'bookingsSeries']);
+            Route::get('/analytics/user-growth', [AdminAnalyticsController::class, 'userGrowthSeries']);
+            Route::get('/analytics/top-providers', [AdminAnalyticsController::class, 'topProviders']);
+
+            Route::get('/users', [AdminUserController::class, 'index']);
+            Route::get('/users/{id}', [AdminUserController::class, 'show']);
+            Route::patch('/users/{id}/suspend', [AdminUserController::class, 'suspend']);
+            Route::patch('/users/{id}/reactivate', [AdminUserController::class, 'reactivate']);
+
+            Route::get('/providers', [AdminProviderController::class, 'index']);
+            Route::get('/providers/{providerProfile}', [AdminProviderController::class, 'show']);
+            Route::patch('/providers/{providerProfile}/verify', [AdminProviderController::class, 'verify']);
+            Route::patch('/providers/{providerProfile}/unverify', [AdminProviderController::class, 'unverify']);
+            Route::patch('/providers/{providerProfile}/feature', [AdminProviderController::class, 'feature']);
+            Route::patch('/providers/{providerProfile}/unfeature', [AdminProviderController::class, 'unfeature']);
+
+            Route::get('/appointments', [AdminAppointmentController::class, 'index']);
+            Route::patch('/appointments/{appointment}/cancel', [AdminAppointmentController::class, 'cancel']);
+
+            // System-wide payments kill switch
+            Route::get('/settings', [AdminSettingsController::class, 'show']);
+            Route::patch('/settings/payments', [AdminSettingsController::class, 'updatePayments']);
+        });
     });
 });

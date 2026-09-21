@@ -7,7 +7,9 @@ use App\Events\ClientCheckedIn;
 use App\Events\NewAppointmentBooked;
 use App\Models\Appointment;
 use App\Models\Service;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class AppointmentController extends Controller
@@ -22,7 +24,9 @@ class AppointmentController extends Controller
                 ->with(['client:id,name,phone,avatar', 'service:id,name,price,duration_minutes']);
         } else {
             $query = $user->appointmentsAsClient()
-                ->with(['providerProfile:id,business_name,cover_image', 'service:id,name,price']);
+                // `review` is eager-loaded so the frontend can tell, per appointment,
+                // whether the client has already rated it — without a second request.
+                ->with(['providerProfile:id,business_name,cover_image', 'service:id,name,price', 'review']);
         }
 
         if ($request->filled('status')) {
@@ -44,16 +48,41 @@ class AppointmentController extends Controller
         $service = Service::with('providerProfile')->findOrFail($validated['service_id']);
 
         abort_if(! $service->providerProfile->is_open, 422, 'This provider is currently closed');
+        abort_if(! $service->providerProfile->is_subscription_active, 422, 'This provider is not currently accepting bookings.');
 
-        $appointment = Appointment::create([
-            'client_id' => $request->user()->id,
-            'provider_profile_id' => $service->provider_profile_id,
-            'service_id' => $service->id,
-            'scheduled_at' => $validated['scheduled_at'],
-            'price_at_booking' => $service->price,
-            'client_notes' => $validated['client_notes'] ?? null,
-            'status' => 'pending',
-        ]);
+        // Wrapped in a transaction with a row lock on the provider's same-day appointments
+        // so two clients booking the same slot at the same instant can't both succeed —
+        // the second request blocks briefly, then sees the first one's booking and is rejected.
+        $appointment = DB::transaction(function () use ($service, $validated, $request) {
+            $start = Carbon::parse($validated['scheduled_at']);
+            $end = $start->copy()->addMinutes($service->duration_minutes);
+
+            $sameDayAppointments = Appointment::where('provider_profile_id', $service->provider_profile_id)
+                ->whereNotIn('status', ['cancelled', 'no_show'])
+                ->whereDate('scheduled_at', $start->toDateString())
+                ->with('service:id,duration_minutes')
+                ->lockForUpdate()
+                ->get();
+
+            $hasConflict = $sameDayAppointments->contains(function ($existing) use ($start, $end) {
+                $existingStart = Carbon::parse($existing->scheduled_at);
+                $existingEnd = $existingStart->copy()->addMinutes($existing->service->duration_minutes ?? 30);
+
+                return $start->lt($existingEnd) && $end->gt($existingStart);
+            });
+
+            abort_if($hasConflict, 422, 'This time slot is no longer available with this provider — please pick another time.');
+
+            return Appointment::create([
+                'client_id' => $request->user()->id,
+                'provider_profile_id' => $service->provider_profile_id,
+                'service_id' => $service->id,
+                'scheduled_at' => $validated['scheduled_at'],
+                'price_at_booking' => $service->price,
+                'client_notes' => $validated['client_notes'] ?? null,
+                'status' => 'pending',
+            ]);
+        });
 
         broadcast(new NewAppointmentBooked($appointment));
 
@@ -67,15 +96,30 @@ class AppointmentController extends Controller
         return response()->json($appointment->load('client:id,name,phone,avatar', 'service', 'providerProfile', 'review'));
     }
 
-    /** Provider confirms/declines, or either party cancels/completes. */
+    /** Provider confirms/starts/completes/no-shows; client may only cancel their own booking. */
     public function updateStatus(Request $request, Appointment $appointment)
     {
         $this->authorizeParty($request, $appointment);
 
+        $isProvider = $appointment->provider_profile_id === $request->user()->providerProfile?->id;
+
+        $allowedStatuses = $isProvider
+            ? ['confirmed', 'in_progress', 'completed', 'cancelled', 'no_show']
+            : ['cancelled']; // a client can cancel, but only a provider can confirm/start/complete/no-show
+
         $validated = $request->validate([
-            'status' => ['required', Rule::in(['confirmed', 'in_progress', 'completed', 'cancelled', 'no_show'])],
+            'status' => ['required', Rule::in($allowedStatuses)],
             'provider_notes' => 'nullable|string|max:1000',
         ]);
+
+        if (! $isProvider) {
+            abort_if(
+                ! in_array($appointment->status, ['pending', 'confirmed'], true),
+                422,
+                'This appointment can no longer be cancelled.'
+            );
+            unset($validated['provider_notes']); // clients don't write provider notes
+        }
 
         $appointment->update($validated);
 

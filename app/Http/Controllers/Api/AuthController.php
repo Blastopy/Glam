@@ -6,6 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
@@ -80,5 +84,109 @@ class AuthController extends Controller
     public function me(Request $request)
     {
         return response()->json($request->user()->load('providerProfile'));
+    }
+
+    /**
+     * "Continue with Google" — the frontend uses Google Identity Services to get
+     * a signed ID token, which we verify here rather than running a full OAuth
+     * redirect dance (unnecessary for a token the browser already obtained).
+     *
+     * New sign-ins are always created as clients — Google is a consumer-facing
+     * shortcut, not a provider-onboarding path (providers still go through
+     * /register + the subscription fee). An email that already has an account
+     * (regardless of how it was created) just logs into that existing account.
+     */
+    public function google(Request $request)
+    {
+        $request->validate(['credential' => 'required|string']);
+
+        $verification = Http::asForm()->get('https://oauth2.googleapis.com/tokeninfo', [
+            'id_token' => $request->credential,
+        ]);
+
+        if (! $verification->successful()) {
+            return response()->json(['message' => 'Could not verify this Google sign-in. Please try again.'], 422);
+        }
+
+        $payload = $verification->json();
+
+        $expectedClientId = config('services.google.client_id');
+        if ($expectedClientId && ($payload['aud'] ?? null) !== $expectedClientId) {
+            Log::warning('Google sign-in token audience mismatch', ['aud' => $payload['aud'] ?? null]);
+
+            return response()->json(['message' => 'Could not verify this Google sign-in. Please try again.'], 422);
+        }
+
+        if (($payload['email_verified'] ?? 'false') !== 'true' || empty($payload['email'])) {
+            return response()->json(['message' => 'Your Google account email is not verified.'], 422);
+        }
+
+        $email = $payload['email'];
+
+        // Check trashed too — a suspended account shouldn't be reachable via a
+        // different login method, and firstOrCreate() would otherwise throw a
+        // duplicate-email error trying to insert a second row for it.
+        $existing = User::withTrashed()->where('email', $email)->first();
+
+        if ($existing?->trashed()) {
+            return response()->json(['message' => 'This account has been suspended.'], 403);
+        }
+
+        $user = $existing ?? User::create([
+            'name' => $payload['name'] ?? explode('@', $email)[0],
+            'email' => $email,
+            'password' => Hash::make(Str::random(40)), // unusable password — this account only signs in via Google
+            'role' => 'client',
+        ]);
+
+        $token = $user->createToken('api-token')->plainTextToken;
+
+        return response()->json([
+            'user' => $user->load('providerProfile'),
+            'token' => $token,
+        ], $existing ? 200 : 201);
+    }
+
+    /**
+     * Sends a password reset email if the address exists. Always returns the
+     * same generic message either way — confirming or denying an email exists
+     * is a minor account-enumeration leak, not worth the marginal UX gain.
+     */
+    public function forgotPassword(Request $request)
+    {
+        $request->validate(['email' => 'required|email']);
+
+        Password::sendResetLink($request->only('email'));
+
+        return response()->json([
+            'message' => 'If an account exists for that email, a password reset link has been sent.',
+        ]);
+    }
+
+    /** Completes a reset using the token from the emailed link (see AppServiceProvider for the link's URL). */
+    public function resetPassword(Request $request)
+    {
+        $validated = $request->validate([
+            'token' => 'required|string',
+            'email' => 'required|email',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $status = Password::reset(
+            $validated,
+            function (User $user, string $password) {
+                $user->forceFill(['password' => Hash::make($password)])->save();
+
+                // Any tokens issued before the reset are now stale — force a
+                // fresh login everywhere rather than leaving old sessions valid.
+                $user->tokens()->delete();
+            }
+        );
+
+        if ($status !== Password::PASSWORD_RESET) {
+            return response()->json(['message' => __($status)], 422);
+        }
+
+        return response()->json(['message' => 'Your password has been reset. You can now log in.']);
     }
 }

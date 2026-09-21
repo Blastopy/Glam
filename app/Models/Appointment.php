@@ -16,6 +16,7 @@ class Appointment extends Model
         'client_id', 'provider_profile_id', 'service_id', 'scheduled_at',
         'checked_in_at', 'price_at_booking', 'deposit_amount', 'is_deposit_paid',
         'status', 'client_notes', 'provider_notes',
+        'is_home_service', 'home_address', 'home_latitude', 'home_longitude',
     ];
 
     protected function casts(): array
@@ -26,6 +27,9 @@ class Appointment extends Model
             'price_at_booking' => 'decimal:2',
             'deposit_amount' => 'decimal:2',
             'is_deposit_paid' => 'boolean',
+            'is_home_service' => 'boolean',
+            'home_latitude' => 'decimal:7',
+            'home_longitude' => 'decimal:7',
         ];
     }
 
