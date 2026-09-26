@@ -76,13 +76,22 @@ async function handleSuccess(expiresAt) {
   unsubscribeFromChannel()
   stage.value = 'success'
   status.value = { ...status.value, is_active: true, expires_at: expiresAt, days_left: null }
-  await auth.refreshUser()
+
+  // Fixes "Go to dashboard" appearing to do nothing: the router guard on
+  // /dashboard reads auth.user's cached providerProfile synchronously. If we
+  // only relied on the network refetch below and it was slow or failed, the
+  // guard would still see the pre-payment (unpaid) state and silently bounce
+  // the click straight back to this page. Patch local state immediately so
+  // the button works regardless of that refetch's timing or success.
+  auth.setProviderSubscriptionActive(expiresAt)
 
   try {
+    await auth.refreshUser() // picks up the authoritative days_left, verified/featured flags, etc.
     const { data } = await subscriptionApi.status()
     status.value = data
   } catch {
-    // non-critical — the success screen still shows correctly with days_left omitted
+    // non-critical — the success screen and the dashboard redirect both still
+    // work correctly off the optimistic update above even if this fails
   }
 
   startRedirectCountdown()

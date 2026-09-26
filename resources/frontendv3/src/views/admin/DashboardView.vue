@@ -16,6 +16,7 @@ const rangeDays = ref(30)
 const loading = ref(true)
 const loadError = ref('')
 
+
 async function loadAll() {
   loading.value = true
   loadError.value = ''

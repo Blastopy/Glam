@@ -157,13 +157,6 @@ class ProviderProfile extends Model
             + sin(radians($lat))
             * sin(radians(latitude))))";
 
-        // return $query
-        //     ->selectRaw("provider_profiles.*, {$haversine} AS distance_km")
-        //     ->whereNotNull('latitude')
-        //     ->whereNotNull('longitude')
-        //     ->having('distance_km', '<=', $radiusKm)
-        //     ->orderBy('distance_km');
-
         return $query
     ->select('provider_profiles.*')
     ->selectRaw("{$haversine} AS distance_km")
@@ -172,4 +165,5 @@ class ProviderProfile extends Model
     ->having('distance_km', '<=', $radiusKm)
     ->orderBy('distance_km');
     }
+   
 }

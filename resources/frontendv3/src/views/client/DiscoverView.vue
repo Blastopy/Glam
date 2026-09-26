@@ -14,6 +14,7 @@ const notifications = useNotificationsStore()
 const router = useRouter()
 const brokenUrls = ref(new Set())
 const viewMode = ref('list') // 'list' | 'map'
+let searchDebounceTimer = null
 
 function markBroken(url) {
   brokenUrls.value.add(url)
@@ -25,6 +26,12 @@ async function search() {
   } catch {
     // The axios interceptor already toasts network/server failures
   }
+}
+
+/** Debounced so typing doesn't fire a request per keystroke. */
+function onSearchInput() {
+  clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(search, 400)
 }
 
 async function findNearby() {
@@ -44,7 +51,7 @@ onMounted(search)
 
 const allPhotos = computed(() =>
   store.list
-    .flatMap((p) => (p.services || []).filter((s) => s.image_url).map((s) => ({ ...s, provider: p.business_name })))
+    .flatMap((p) => (p.services || []).filter((s) => s.image_url).map((s) => ({ ...s, provider: p.business_name, providerId: p.id })))
     .filter((s) => !brokenUrls.value.has(s.image_url))
 )
 const heroPhotos = computed(() => allPhotos.value.slice(0, 4))
@@ -88,7 +95,21 @@ function openProviderFromMap(id) {
           Barbers, salons and nail artists near you — browse real work, see honest prices, and book straight from your phone.
         </p>
 
-        <div class="flex flex-wrap gap-3 items-center mt-6">
+        <div class="relative mt-6 max-w-md">
+          <input
+            v-model="store.filters.search"
+            @input="onSearchInput"
+            type="search"
+            placeholder="Search a style or a provider…"
+            class="w-full pl-10 pr-4 py-3 rounded-full border border-ink/15 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-clay-200"
+          />
+          <svg viewBox="0 0 24 24" fill="none" class="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-ink-soft">
+            <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" />
+            <path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </div>
+
+        <div class="flex flex-wrap gap-3 items-center mt-4">
           <select v-model="store.filters.type" @change="search"
             class="px-4 py-2.5 rounded-full border border-ink/15 text-sm bg-white">
             <option value="">All types</option>
@@ -149,14 +170,15 @@ function openProviderFromMap(id) {
     <section v-if="trendingPhotos.length" class="mb-10">
       <h2 class="font-heading text-lg text-ink mb-3">Trending styles</h2>
       <div class="flex gap-3 overflow-x-auto scroll-strip pb-2">
-        <div v-for="photo in trendingPhotos" :key="photo.id"
-          class="relative shrink-0 w-36 h-44 rounded-xl overflow-hidden group">
+        <RouterLink v-for="photo in trendingPhotos" :key="photo.id"
+          :to="`/providers/${photo.providerId}?style=${photo.id}`"
+          class="relative shrink-0 w-36 h-44 rounded-xl overflow-hidden group block">
           <img :src="photo.image_url" :alt="photo.name" class="w-full h-full object-cover" @error="markBroken(photo.image_url)" />
           <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/80 to-transparent p-2.5">
             <p class="text-white text-xs font-medium leading-tight">{{ photo.name }}</p>
             <p class="text-white/70 text-[11px]">{{ photo.provider }}</p>
           </div>
-        </div>
+        </RouterLink>
       </div>
     </section>
 

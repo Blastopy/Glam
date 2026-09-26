@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useProvidersStore } from '@/stores/providers'
 import { useAppointmentsStore } from '@/stores/appointments'
@@ -36,12 +36,27 @@ async function load() {
   loadError.value = ''
   try {
     await providers.fetchOne(route.params.id)
+    scrollToRequestedStyle()
   } catch (e) {
     loadError.value = extractErrorMessage(e, 'Could not load this provider. Please go back and try again.')
   }
 }
 
 onMounted(load)
+
+// Arriving from a "trending styles" photo click (?style=<id>) — scroll that
+// specific style into view and give it a lasting highlight so it's obvious
+// which one they came here for, without forcing a login/booking action.
+const highlightedServiceId = computed(() => {
+  const id = Number(route.query.style)
+  return Number.isFinite(id) ? id : null
+})
+
+async function scrollToRequestedStyle() {
+  if (!highlightedServiceId.value) return
+  await nextTick()
+  document.getElementById(`service-${highlightedServiceId.value}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
 
 function pickService(service) {
   if (!auth.isAuthenticated) {
@@ -214,8 +229,8 @@ function formatReviewDate(d) {
 
     <h2 class="font-heading text-lg text-ink mb-3">Styles &amp; pricing</h2>
     <div class="grid sm:grid-cols-2 gap-3 mb-6">
-      <button v-for="s in providers.current.services" :key="s.id" @click="pickService(s)"
-        :class="['text-left rounded-xl border overflow-hidden transition', selectedService?.id === s.id ? 'border-clay-500 ring-2 ring-clay-100' : 'border-ink/10 bg-white hover:border-ink/20']">
+      <button v-for="s in providers.current.services" :key="s.id" :id="`service-${s.id}`" @click="pickService(s)"
+        :class="['text-left rounded-xl border overflow-hidden transition', selectedService?.id === s.id ? 'border-clay-500 ring-2 ring-clay-100' : highlightedServiceId === s.id ? 'border-amber-400 ring-2 ring-amber-100' : 'border-ink/10 bg-white hover:border-ink/20']">
         <div v-if="s.image_url && !brokenUrls.has(s.image_url)" class="h-32 w-full">
           <img :src="s.image_url" :alt="s.name" class="w-full h-full object-cover" @error="markBroken(s.image_url)" />
         </div>

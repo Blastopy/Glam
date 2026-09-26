@@ -3,7 +3,7 @@ const year = new Date().getFullYear()
 
 // Update these with the business's real details/handles before launch.
 const contact = {
-  email: 'hello@mystyle.co.ke',
+  email: 'hello@salonbook.co.ke',
   phone: '+254 700 000 000',
 }
 
@@ -57,7 +57,7 @@ const socials = [
     </div>
 
     <div class="border-t border-ink/10 py-4">
-      <p class="text-center text-xs text-ink-soft/70">© {{ year }} MyStyle. All rights reserved.</p>
+      <p class="text-center text-xs text-ink-soft/70">© {{ year }} SalonBook. All rights reserved.</p>
     </div>
   </footer>
 </template>

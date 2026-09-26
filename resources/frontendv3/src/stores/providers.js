@@ -6,7 +6,7 @@ export const useProvidersStore = defineStore('providers', {
     list: [],
     current: null,
     loading: false,
-    filters: { type: '', open_only: false, home_service: false, lat: null, lng: null, radius_km: 10 },
+    filters: { type: '', open_only: false, home_service: false, search: '', lat: null, lng: null, radius_km: 10 },
   }),
 
   actions: {

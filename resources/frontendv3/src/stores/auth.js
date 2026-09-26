@@ -65,12 +65,6 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    /** Refreshes the cached user — call after a subscription payment succeeds so
-     * isProviderSubscriptionActive reflects the new expiry without a re-login. */
-    async refreshUser() {
-      return this.fetchMe()
-    },
-
     async logout() {
       try {
         await authApi.logout()
@@ -83,11 +77,45 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    /** Refreshes the cached user from the server — call after anything that
+     * changes role-relevant state (e.g. a subscription payment) so router
+     * guards see it without a re-login. */
     async fetchMe() {
       const { data } = await authApi.me()
       this.user = data
       localStorage.setItem('auth_user', JSON.stringify(data))
       return data
+    },
+
+    async refreshUser() {
+      return this.fetchMe()
+    },
+
+    /**
+     * Patches the cached provider profile's subscription fields immediately,
+     * without a network round-trip. Exists because the router guard that
+     * gates /dashboard reads auth.user's cached providerProfile synchronously
+     * — if a post-payment refetch (fetchMe/refreshUser) is slow or drops,
+     * the guard would still see the old, unpaid state and bounce a provider
+     * straight back to /provider/activate the instant they click
+     * "Go to dashboard", even though the payment genuinely succeeded. Calling
+     * this right after a confirmed payment makes the local state correct
+     * immediately, independent of whether the follow-up refetch succeeds.
+     */
+    setProviderSubscriptionActive(expiresAt) {
+      if (!this.user) return
+
+      const patch = { is_subscription_active: true, subscription_expires_at: expiresAt }
+
+      if (this.user.providerProfile) {
+        this.user = { ...this.user, providerProfile: { ...this.user.providerProfile, ...patch } }
+      } else if (this.user.provider_profile) {
+        this.user = { ...this.user, provider_profile: { ...this.user.provider_profile, ...patch } }
+      } else {
+        return // no provider profile cached at all — nothing to patch
+      }
+
+      localStorage.setItem('auth_user', JSON.stringify(this.user))
     },
   },
 })

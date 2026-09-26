@@ -12,6 +12,7 @@ export default defineConfig({
   server: {
     allowedHosts: [
      '.ngrok-free.app',
+     '.loca.lt'
                 ],
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',

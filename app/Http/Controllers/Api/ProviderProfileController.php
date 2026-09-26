@@ -33,6 +33,18 @@ class ProviderProfileController extends Controller
             $query->offersHomeService();
         }
 
+        // Search matches either the business name or any of its active
+        // style/service names — "barber" and "skin fade" should both work.
+        if ($request->filled('search')) {
+            $term = '%' . $request->search . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('business_name', 'like', $term)
+                    ->orWhereHas('services', function ($sq) use ($term) {
+                        $sq->where('name', 'like', $term)->where('is_active', true);
+                    });
+            });
+        }
+
         if ($request->filled('lat') && $request->filled('lng')) {
             $query->nearby(
                 (float) $request->lat,
