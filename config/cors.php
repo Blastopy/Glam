@@ -23,8 +23,7 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => ['*', 
-    'http://localhost:5173',
-    'https://c8ee-62-8-92-212.ngrok-free.app'
+    'https://glam-frontend-lemon.vercel.app',
 ],
 
     'allowed_origins_patterns' => [],
