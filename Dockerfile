@@ -43,3 +43,4 @@ EXPOSE 10000
 # Start Laravel
 CMD php artisan migrate --force && \
     php artisan serve --host=0.0.0.0 --port=${PORT:-10000}
+    php artisan reverb:start
