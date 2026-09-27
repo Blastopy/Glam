@@ -19,7 +19,7 @@ class AppServiceProvider extends ServiceProvider
         // (which collects the new password and calls POST /api/v1/reset-password),
         // not Laravel's default web route (there isn't one; this app has no web UI).
         ResetPassword::createUrlUsing(function ($notifiable, string $token) {
-            $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:5173'), '/');
+            $frontendUrl = rtrim(env('FRONTEND_URL', 'https://glam-frontend-lemon.vercel.app/'), '/');
 
             return "{$frontendUrl}/reset-password?token={$token}&email=" . urlencode($notifiable->getEmailForPasswordReset());
         });
