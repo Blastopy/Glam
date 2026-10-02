@@ -29,7 +29,7 @@ RUN composer install \
     --no-interaction
 
 # Create SQLite database
-RUN touch database/database.sqlite
+# RUN touch database/database.sqlite
 
 # Set permissions
 RUN chmod -R 775 storage bootstrap/cache database
