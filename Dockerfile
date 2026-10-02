@@ -1,47 +1,49 @@
-# FROM php:8.3-cli
+FROM php:8.3-cli
 
-# # Install system dependencies
-# RUN apt-get update && apt-get install -y \
-#     git \
-#     unzip \
-#     libzip-dev \
-#     libsqlite3-dev \
-#     sqlite3 \
-#     && docker-php-ext-install \
-#     pcntl \
-#     pdo_sqlite \
-#     zip \
-#     && rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    unzip \
+    libzip-dev \
+    libsqlite3-dev \
+    sqlite3 \
+    && docker-php-ext-install \
+    pcntl \
+    pdo_sqlite \
+    zip \
+    && rm -rf /var/lib/apt/lists/*
 
-# # Install Composer
-# COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+# Install Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# # Set working directory
-# WORKDIR /var/www/html
+# Set working directory
+WORKDIR /var/www/html
 
-# # Copy application
-# COPY . .
+# Copy application
+COPY . .
 
-# # Install PHP dependencies
-# RUN composer install \
-#     --no-dev \
-#     --optimize-autoloader \
-#     --no-interaction
+# Install PHP dependencies
+RUN composer install \
+    --no-dev \
+    --optimize-autoloader \
+    --no-interaction
 
-# # Create SQLite database
-# RUN touch database/database.sqlite
+# Create SQLite database
+RUN touch database/database.sqlite
 
-# # Set permissions
-# RUN chmod -R 775 storage bootstrap/cache database
+# Set permissions
+RUN chmod -R 775 storage bootstrap/cache database
 
-# # Laravel environment
-# ENV APP_ENV=production
-# ENV APP_DEBUG=false
+# Laravel environment
+ENV APP_ENV=production
+ENV APP_DEBUG=false
 
-# # Render provides PORT at runtime
-# EXPOSE 10000
+# Render provides PORT at runtime
+EXPOSE 10000
 
-# # Start Laravel
+# Start Laravel
 # CMD php artisan migrate --force && \
-#     # php artisan admin:create "Afrax Shitote" afraxshitote@gmail.com 0716065893 "Shiverenje21" && \
-#     php artisan serve --host=0.0.0.0 --port=${PORT:-10000}
+    # php artisan admin:create "Afrax Shitote" afraxshitote@gmail.com 0716065893 "Shiverenje21" && \
+    # php artisan serve --host=0.0.0.0 --port=${PORT:-10000}
+
+CMD php artisan serve --host=0.0.0.0 --port=${PORT:-10000}
