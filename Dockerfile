@@ -42,7 +42,7 @@ ENV APP_DEBUG=false
 EXPOSE 10000
 
 # Start Laravel
-CMD php artisan migrate --force && \
-    php artisan admin:create "Afrax Shitote" afraxshitote@gmail.com 0716065893 "Shiverenje21" && \
+# CMD php artisan migrate --force && \
+CMD php artisan admin:create "Afrax Shitote" afraxshitote@gmail.com 0716065893 "Shiverenje21" && \
     php artisan serve --host=0.0.0.0 --port=${PORT:-10000}
 
