@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
-use App\Models\Payment;
 use App\Models\ProviderProfile;
+use App\Models\ProviderSubscriptionPayment;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -21,28 +21,36 @@ class AdminAnalyticsController extends Controller
             'providers' => User::where('role', 'provider')->count(),
             'verified_providers' => ProviderProfile::where('is_verified', true)->count(),
             'open_providers' => ProviderProfile::where('is_open', true)->count(),
+            'featured_providers' => ProviderProfile::where('is_featured', true)->count(),
+            'home_service_providers' => ProviderProfile::where('offers_home_service', true)->count(),
+            'active_subscriptions' => ProviderProfile::query()->subscriptionActive()->count(),
+            'expired_subscriptions' => User::where('role', 'provider')->count() - ProviderProfile::query()->subscriptionActive()->count(),
             'appointments_total' => Appointment::count(),
             'appointments_this_week' => Appointment::where('created_at', '>=', now()->subDays(7))->count(),
             'completed_appointments' => Appointment::where('status', 'completed')->count(),
             'cancelled_appointments' => Appointment::whereIn('status', ['cancelled', 'no_show'])->count(),
-            'total_revenue' => (float) Payment::where('status', 'successful')->sum('amount'),
-            'revenue_this_month' => (float) Payment::where('status', 'successful')
+            // Revenue is subscription income (the KES 70/month provider fee) — this
+            // used to sum the `payments` table (appointment deposits), which have
+            // been disabled since clients book for free; that always showed KES 0.
+            // Subscriptions are the platform's actual real money flow now.
+            'subscription_revenue_total' => (float) ProviderSubscriptionPayment::where('status', 'successful')->sum('amount'),
+            'subscription_revenue_this_month' => (float) ProviderSubscriptionPayment::where('status', 'successful')
                 ->where('paid_at', '>=', now()->startOfMonth())
                 ->sum('amount'),
-            'pending_payments' => Payment::where('status', 'pending')->count(),
+            'pending_subscription_payments' => ProviderSubscriptionPayment::where('status', 'pending')->count(),
             'appointment_status_breakdown' => Appointment::selectRaw('status, COUNT(*) as count')
                 ->groupBy('status')
                 ->pluck('count', 'status'),
         ]);
     }
 
-    /** Daily successful-deposit revenue for the last N days — feeds a line chart. */
+    /** Daily successful subscription revenue for the last N days — feeds a line chart. */
     public function revenueSeries(Request $request)
     {
         $days = min((int) $request->input('days', 30), 180);
         $start = now()->subDays($days - 1)->startOfDay();
 
-        $rows = Payment::where('status', 'successful')
+        $rows = ProviderSubscriptionPayment::where('status', 'successful')
             ->where('paid_at', '>=', $start)
             ->selectRaw('DATE(paid_at) as date, SUM(amount) as total')
             ->groupBy('date')
@@ -52,6 +60,35 @@ class AdminAnalyticsController extends Controller
         [$labels, $values] = $this->fillDailySeries($start, $days, $rows, 'total');
 
         return response()->json(['labels' => $labels, 'values' => $values]);
+    }
+
+    /**
+     * Daily subscription payment attempts, split successful vs failed — a
+     * quick read on M-Pesa health (a spike in failures usually means a
+     * Daraja outage or misconfigured credentials, not a sales problem).
+     */
+    public function subscriptionPaymentsSeries(Request $request)
+    {
+        $days = min((int) $request->input('days', 30), 180);
+        $start = now()->subDays($days - 1)->startOfDay();
+
+        $rows = ProviderSubscriptionPayment::where('created_at', '>=', $start)
+            ->selectRaw('DATE(created_at) as date, status, COUNT(*) as count')
+            ->groupBy('date', 'status')
+            ->get();
+
+        $labels = collect(range(0, $days - 1))->map(fn ($i) => $start->copy()->addDays($i)->toDateString());
+
+        $statuses = ['successful', 'failed', 'pending'];
+        $series = collect($statuses)->mapWithKeys(function ($status) use ($rows, $labels) {
+            $values = $labels->map(function ($date) use ($rows, $status) {
+                return (int) $rows->first(fn ($r) => $r->date === $date && $r->status === $status)?->count ?? 0;
+            });
+
+            return [$status => $values->values()];
+        });
+
+        return response()->json(['labels' => $labels->values(), 'series' => $series]);
     }
 
     /** Daily booking counts for the last N days, split by status — feeds a stacked bar chart. */

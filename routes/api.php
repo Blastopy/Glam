@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ProviderSubscriptionController;
 use App\Http\Controllers\Api\ProviderProfileController;
+use App\Http\Controllers\Api\ProviderAnalyticsController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\SystemSettingsController;
@@ -90,11 +91,13 @@ Route::prefix('v1')->group(function () {
         Route::get('/provider/subscription', [ProviderSubscriptionController::class, 'status']);
         Route::post('/provider/subscription/pay', [ProviderSubscriptionController::class, 'initiate']);
         Route::get('/provider/subscription/{payment}/poll', [ProviderSubscriptionController::class, 'poll']);
+        Route::get('/provider/analytics/clients', [ProviderAnalyticsController::class, 'clients']);
 
         // ── Admin panel ───────────────────────────────────
         Route::middleware('admin')->prefix('admin')->group(function () {
             Route::get('/analytics/overview', [AdminAnalyticsController::class, 'overview']);
             Route::get('/analytics/revenue', [AdminAnalyticsController::class, 'revenueSeries']);
+            Route::get('/analytics/subscription-payments', [AdminAnalyticsController::class, 'subscriptionPaymentsSeries']);
             Route::get('/analytics/bookings', [AdminAnalyticsController::class, 'bookingsSeries']);
             Route::get('/analytics/user-growth', [AdminAnalyticsController::class, 'userGrowthSeries']);
             Route::get('/analytics/top-providers', [AdminAnalyticsController::class, 'topProviders']);
