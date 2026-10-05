@@ -14,9 +14,9 @@ class MpesaService
 
     // Safaricom's sandbox can be slow; fail fast rather than hanging the request,
     // and retry once in case of a transient blip before giving up.
-    private const TIMEOUT_SECONDS = 15;
-    private const RETRY_TIMES = 2;
-    private const RETRY_DELAY_MS = 300;
+    private const TIMEOUT_SECONDS = 30;
+    private const RETRY_TIMES = 4;
+    private const RETRY_DELAY_MS = 600;
 
     public function __construct()
     {
