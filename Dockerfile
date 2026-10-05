@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     pcntl \
     pdo_sqlite \
     zip \
+    bcmath \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Composer
