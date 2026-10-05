@@ -163,24 +163,64 @@ class ProviderProfile extends Model
         //     ->whereNotNull('longitude')
         //     ->having('distance_km', '<=', $radiusKm)
         //     ->orderBy('distance_km');
-        $haversine = "(6371 * acos(
-        least(1, greatest(-1,
-            cos(radians(?))
-            * cos(radians(latitude))
-            * cos(radians(longitude) - radians(?))
-            + sin(radians(?))
-            * sin(radians(latitude))
-        ))
-    ))";
+
+        $latRad = deg2rad($lat);
+    $lngRad = deg2rad($lng);
+
+    $distanceSql = <<<SQL
+        6371 * acos(
+            LEAST(
+                1.0,
+                GREATEST(
+                    -1.0,
+                    cos(?) *
+                    cos(radians(latitude)) *
+                    cos(radians(longitude) - ?) +
+                    sin(?) *
+                    sin(radians(latitude))
+                )
+            )
+        )
+    SQL;
 
     return $query
         ->selectRaw(
-            "provider_profiles.*, {$haversine} AS distance_km",
-            [$lat, $lng, $lat]
+            "provider_profiles.*, {$distanceSql} AS distance_km",
+            [$latRad, $lngRad, $latRad]
         )
         ->whereNotNull('latitude')
         ->whereNotNull('longitude')
-        ->having('distance_km', '<=', $radiusKm)
-        ->orderBy('distance_km');
+        ->orderByRaw(
+            "6371 * acos(
+                LEAST(
+                    1.0,
+                    GREATEST(
+                        -1.0,
+                        cos(?) *
+                        cos(radians(latitude)) *
+                        cos(radians(longitude) - ?) +
+                        sin(?) *
+                        sin(radians(latitude))
+                    )
+                )
+            )",
+            [$latRad, $lngRad, $latRad]
+        )
+        ->whereRaw(
+            "6371 * acos(
+                LEAST(
+                    1.0,
+                    GREATEST(
+                        -1.0,
+                        cos(?) *
+                        cos(radians(latitude)) *
+                        cos(radians(longitude) - ?) +
+                        sin(?) *
+                        sin(radians(latitude))
+                    )
+                )
+            ) <= ?",
+            [$latRad, $lngRad, $latRad, $radiusKm]
+        );
     }
 }
