@@ -50,6 +50,14 @@ Route::prefix('v1')->group(function () {
     Route::get('/providers/{providerProfile}', [ProviderProfileController::class, 'show']);
     Route::get('/providers/{providerProfileId}/services', [ServiceController::class, 'index']);
 
+    // Feaure #5 Push Notifications
+    Route::middleware('signed')->group(function () {
+    Route::get('/appointments/{appointment}/quick-accept', [AppointmentQuickActionController::class, 'accept'])
+        ->name('appointments.quick-accept');
+    Route::get('/appointments/{appointment}/quick-decline', [AppointmentQuickActionController::class, 'decline'])
+        ->name('appointments.quick-decline');
+});
+
     // Lets the frontend know whether the payments system is currently switched on
     Route::get('/system-settings', [SystemSettingsController::class, 'status']);
 
@@ -83,10 +91,12 @@ Route::prefix('v1')->group(function () {
         Route::get('/messages/{user}', [MessageController::class, 'thread']);
         Route::post('/messages', [MessageController::class, 'store']);
 
+=======
         // Feature #5: quick Accept/Decline buttons in the push notification
         Route::post('/push/subscribe', [PushSubscriptionController::class, 'store']);
         Route::delete('/push/unsubscribe', [PushSubscriptionController::class, 'destroy']);
 
+>>>>>>> b6acdb5992460f3467abe2c5f04b978fa995b00d
         // Feature #7: provider's client book
         Route::get('/provider/clients', [ClientBookController::class, 'index']);
         Route::post('/provider/clients', [ClientBookController::class, 'store']);

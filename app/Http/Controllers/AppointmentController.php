@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Events\ClientCheckedIn;
 use App\Events\NewAppointmentBooked;
+use App\Notifications\NewAppointmentBookedPush;
 use App\Models\Appointment;
 use App\Models\Service;
 use Carbon\Carbon;
@@ -85,6 +86,8 @@ class AppointmentController extends Controller
         });
 
         broadcast(new NewAppointmentBooked($appointment));
+        $appointment->providerProfile->user->notify(new NewAppointmentBookedPush($appointment));
+
 
         return response()->json($appointment->load('service', 'providerProfile'), 201);
     }
