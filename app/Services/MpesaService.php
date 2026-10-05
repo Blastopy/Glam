@@ -160,7 +160,7 @@ class MpesaService
             1 => 'Insufficient M-Pesa balance.',
             2001 => 'Wrong M-Pesa PIN entered.',
             1019 => 'This transaction has expired — please try again.',
-            1025, 9999, 9998 => "Something went wrong on M-Pesa's end. Please try again in a moment.",
+            1025, 9999, 9998, 17, 26 => "Something went wrong on M-Pesa's end. Please try again in a moment.",
             default => $fallback ?: 'Payment was not completed.',
         };
     }
