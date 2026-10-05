@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ProviderSubscriptionController;
 use App\Http\Controllers\Api\ProviderProfileController;
 use App\Http\Controllers\Api\ProviderAnalyticsController;
+use App\Http\Controllers\Api\PushSubscriptionController;
+use App\Http\Controllers\Api\AppointmentQuickActionController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\SystemSettingsController;
@@ -34,6 +36,14 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/google', [AuthController::class, 'google'])->middleware('throttle:10,1');
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
     Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1');
+
+    // Feature #5: quick Accept/Decline buttons in the push notification
+    Route::middleware('signed')->group(function () {
+    Route::get('/appointments/{appointment}/quick-accept', [AppointmentQuickActionController::class, 'accept'])
+        ->name('appointments.quick-accept');
+    Route::get('/appointments/{appointment}/quick-decline', [AppointmentQuickActionController::class, 'decline'])
+        ->name('appointments.quick-decline');
+    });
 
     // Feature #2 & #6: browse/discover providers + their catalogue, no auth needed
     Route::get('/providers', [ProviderProfileController::class, 'index']);
@@ -72,6 +82,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/messages', [MessageController::class, 'index']);
         Route::get('/messages/{user}', [MessageController::class, 'thread']);
         Route::post('/messages', [MessageController::class, 'store']);
+
+        // Feature #5: quick Accept/Decline buttons in the push notification
+        Route::post('/push/subscribe', [PushSubscriptionController::class, 'store']);
+        Route::delete('/push/unsubscribe', [PushSubscriptionController::class, 'destroy']);
 
         // Feature #7: provider's client book
         Route::get('/provider/clients', [ClientBookController::class, 'index']);

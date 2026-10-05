@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Events\ClientCheckedIn;
 use App\Events\NewAppointmentBooked;
 use App\Models\Appointment;
+use App\Notifications\NewAppointmentBookedPush;
 use App\Models\Service;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -105,6 +106,8 @@ class AppointmentController extends Controller
         });
 
         broadcast(new NewAppointmentBooked($appointment));
+        $appointment->providerProfile->user->notify(new NewAppointmentBookedPush($appointment));
+
 
         return response()->json($appointment->load('service', 'providerProfile'), 201);
     }
