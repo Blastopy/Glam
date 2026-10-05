@@ -151,17 +151,36 @@ class ProviderProfile extends Model
      */
     public function scopeNearby($query, float $lat, float $lng, float $radiusKm = 10)
     {
-        $haversine = "(6371 * acos(cos(radians($lat))
-            * cos(radians(latitude))
-            * cos(radians(longitude) - radians($lng))
-            + sin(radians($lat))
-            * sin(radians(latitude))))";
+        // $haversine = "(6371 * acos(cos(radians($lat))
+        //     * cos(radians(latitude))
+        //     * cos(radians(longitude) - radians($lng))
+        //     + sin(radians($lat))
+        //     * sin(radians(latitude))))";
 
-        return $query
-            ->selectRaw("provider_profiles.*, {$haversine} AS distance_km")
-            ->whereNotNull('latitude')
-            ->whereNotNull('longitude')
-            ->having('distance_km', '<=', $radiusKm)
-            ->orderBy('distance_km');
+        // return $query
+        //     ->selectRaw("provider_profiles.*, {$haversine} AS distance_km")
+        //     ->whereNotNull('latitude')
+        //     ->whereNotNull('longitude')
+        //     ->having('distance_km', '<=', $radiusKm)
+        //     ->orderBy('distance_km');
+        $haversine = "(6371 * acos(
+        least(1, greatest(-1,
+            cos(radians(?))
+            * cos(radians(latitude))
+            * cos(radians(longitude) - radians(?))
+            + sin(radians(?))
+            * sin(radians(latitude))
+        ))
+    ))";
+
+    return $query
+        ->selectRaw(
+            "provider_profiles.*, {$haversine} AS distance_km",
+            [$lat, $lng, $lat]
+        )
+        ->whereNotNull('latitude')
+        ->whereNotNull('longitude')
+        ->having('distance_km', '<=', $radiusKm)
+        ->orderBy('distance_km');
     }
 }
