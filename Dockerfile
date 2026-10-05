@@ -5,11 +5,12 @@ RUN apt-get update && apt-get install -y \
     git \
     unzip \
     libzip-dev \
+    libpq-dev \
     libsqlite3-dev \
     sqlite3 \
     && docker-php-ext-install \
     pcntl \
-    pdo_sqlite \
+    pdo_pgsql \
     zip \
     bcmath \
     && rm -rf /var/lib/apt/lists/*

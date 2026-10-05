@@ -91,12 +91,11 @@ Route::prefix('v1')->group(function () {
         Route::get('/messages/{user}', [MessageController::class, 'thread']);
         Route::post('/messages', [MessageController::class, 'store']);
 
-=======
+
         // Feature #5: quick Accept/Decline buttons in the push notification
         Route::post('/push/subscribe', [PushSubscriptionController::class, 'store']);
         Route::delete('/push/unsubscribe', [PushSubscriptionController::class, 'destroy']);
 
->>>>>>> b6acdb5992460f3467abe2c5f04b978fa995b00d
         // Feature #7: provider's client book
         Route::get('/provider/clients', [ClientBookController::class, 'index']);
         Route::post('/provider/clients', [ClientBookController::class, 'store']);
