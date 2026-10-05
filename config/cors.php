@@ -24,6 +24,7 @@ return [
 
     'allowed_origins' => [ 
     'https://glam-frontend-lemon.vercel.app',
+    'https://glamfrontend.onrender.com'
 ],
 
     'allowed_origins_patterns' => [],
