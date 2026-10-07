@@ -28,12 +28,20 @@ class ProviderAnalyticsController extends Controller
         // A "repeat" client is one with more than one completed appointment
         // with this specific provider — not just present in the client book,
         // which can also happen from a single completed visit or a manual add.
+        // $repeatClientIds = $profile->appointments()
+        //     ->where('status', 'completed')
+        //     ->select('client_id', DB::raw('COUNT(*) as visits'))
+        //     ->groupBy('client_id')
+        //     ->having('visits', '>', 1)
+        //     ->pluck('client_id');
+
         $repeatClientIds = $profile->appointments()
-            ->where('status', 'completed')
-            ->select('client_id', DB::raw('COUNT(*) as visits'))
-            ->groupBy('client_id')
-            ->having('visits', '>', 1)
-            ->pluck('client_id');
+        ->where('status', 'completed')
+        ->select('client_id')
+        ->selectRaw('COUNT(*) as visits')
+        ->groupBy('client_id')
+        ->havingRaw('COUNT(*) > 1')
+        ->pluck('client_id');
 
         $completedAppointments = $profile->appointments()->where('status', 'completed')->count();
 
