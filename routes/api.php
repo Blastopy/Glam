@@ -115,6 +115,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/provider/subscription/pay', [ProviderSubscriptionController::class, 'initiate']);
         Route::get('/provider/subscription/{payment}/poll', [ProviderSubscriptionController::class, 'poll']);
         Route::get('/provider/analytics/clients', [ProviderAnalyticsController::class, 'clients']);
+        
 
         // ── Admin panel ───────────────────────────────────
         Route::middleware('admin')->prefix('admin')->group(function () {
@@ -124,6 +125,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/analytics/bookings', [AdminAnalyticsController::class, 'bookingsSeries']);
             Route::get('/analytics/user-growth', [AdminAnalyticsController::class, 'userGrowthSeries']);
             Route::get('/analytics/top-providers', [AdminAnalyticsController::class, 'topProviders']);
+            
 
             Route::get('/users', [AdminUserController::class, 'index']);
             Route::get('/users/{id}', [AdminUserController::class, 'show']);
