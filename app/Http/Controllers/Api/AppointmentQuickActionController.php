@@ -27,7 +27,7 @@ class AppointmentQuickActionController extends Controller
         return $this->applyStatus($appointment, 'cancelled', 'Booking declined.');
     }
 
-    private function applyStatus(Appointment $appointment, string $status, string successMessage)
+    private function applyStatus(Appointment $appointment, string $status, string $successMessage)
     {
         if (! in_array($appointment->status, ['pending', 'confirmed'], true)) {
             return $this->html('This booking has already been ' . $appointment->status . ' — no change made.', isError: true);

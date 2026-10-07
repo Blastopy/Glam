@@ -111,25 +111,121 @@ class MpesaService
     }
 
     /** Actively query the status of a previously-initiated STK push (fallback if callback is delayed/lost). */
-    public function stkQuery(string $checkoutRequestId): array
-    {
-        $shortcode = config('mpesa.shortcode');
-        $passkey = config('mpesa.passkey');
-        $timestamp = now()->format('YmdHis');
-        $password = base64_encode($shortcode . $passkey . $timestamp);
+    /**
+ * Actively query the status of a previously-initiated STK push.
+ *
+ * Returns a normalized response so callers don't have to interpret
+ * Daraja's raw response themselves.
+ *
+ * Possible statuses:
+ * - pending
+ * - successful
+ * - failed
+ * - cancelled
+ */
+public function stkQuery(string $checkoutRequestId): array
+{
+    $shortcode = config('mpesa.shortcode');
+    $passkey = config('mpesa.passkey');
+    $timestamp = now()->format('YmdHis');
+    $password = base64_encode($shortcode . $passkey . $timestamp);
 
-        $response = $this->guardConnection(fn () => Http::withToken($this->getAccessToken())
-            ->timeout(self::TIMEOUT_SECONDS)
-            ->retry(self::RETRY_TIMES, self::RETRY_DELAY_MS)
-            ->post("{$this->baseUrl}/mpesa/stkpushquery/v1/query", [
-                'BusinessShortCode' => $shortcode,
-                'Password' => $password,
-                'Timestamp' => $timestamp,
-                'CheckoutRequestID' => $checkoutRequestId,
-            ]));
+    $response = $this->guardConnection(fn () => Http::withToken($this->getAccessToken())
+        ->timeout(self::TIMEOUT_SECONDS)
+        ->retry(self::RETRY_TIMES, self::RETRY_DELAY_MS)
+        ->post("{$this->baseUrl}/mpesa/stkpushquery/v1/query", [
+            'BusinessShortCode' => $shortcode,
+            'Password' => $password,
+            'Timestamp' => $timestamp,
+            'CheckoutRequestID' => $checkoutRequestId,
+        ]));
 
-        return $response->json() ?? [];
+    $body = $response->json() ?? [];
+
+    Log::info('M-Pesa STK query', [
+        'checkout_request_id' => $checkoutRequestId,
+        'response_code' => $body['ResponseCode'] ?? null,
+        'result_code' => $body['ResultCode'] ?? null,
+        'result_desc' => $body['ResultDesc'] ?? null,
+    ]);
+
+    /*
+     * HTTP/API-level failure.
+     *
+     * This does NOT necessarily mean that the customer's payment failed.
+     * Safaricom could simply be temporarily unavailable.
+     */
+    if (! $response->successful()) {
+        return [
+            'status' => 'pending',
+            'result_code' => null,
+            'result_desc' => 'M-Pesa status is temporarily unavailable.',
+            'raw' => $body,
+        ];
     }
+
+    /*
+     * STK query succeeded at the API level.
+     *
+     * ResultCode 0 means the customer's payment was successful.
+     */
+    $resultCode = isset($body['ResultCode'])
+        ? (int) $body['ResultCode']
+        : null;
+
+    if ($resultCode === 0) {
+        return [
+            'status' => 'successful',
+            'result_code' => 0,
+            'result_desc' => $body['ResultDesc'] ?? 'The transaction was successful.',
+            'raw' => $body,
+        ];
+    }
+
+    /*
+     * These are explicit terminal failures/cancellations.
+     */
+    if ($resultCode !== null) {
+        $message = self::friendlyResultMessage(
+            $resultCode,
+            $body['ResultDesc'] ?? null
+        );
+
+        $cancelledCodes = [
+            1032, // Customer cancelled
+            1037, // DS timeout / unable to reach customer
+        ];
+
+        return [
+            'status' => in_array($resultCode, $cancelledCodes, true)
+                ? 'cancelled'
+                : 'failed',
+            'result_code' => $resultCode,
+            'result_desc' => $message,
+            'raw' => $body,
+        ];
+    }
+
+    /*
+     * No ResultCode yet.
+     *
+     * This is important.
+     *
+     * Do NOT turn this into "failed".
+     *
+     * The transaction may still be processing and the callback may
+     * arrive shortly afterwards.
+     */
+    return [
+        'status' => 'pending',
+        'result_code' => null,
+        'result_desc' => $body['ResultDesc']
+            ?? $body['ResponseDescription']
+            ?? 'Transaction is still being processed.',
+        'raw' => $body,
+    ];
+}
+
 
     /**
      * Wraps an HTTP call so a genuinely unreachable Safaricom endpoint (DNS failure,
