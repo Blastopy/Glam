@@ -65,85 +65,78 @@ class ProviderAnalyticsController extends Controller
     // }
     public function clients(Request $request)
 {
-    try {
-        $user = $request->user();
+    $profile = $request->user()->providerProfile;
 
-        if (!$user) {
-            return response()->json([
-                'error' => 'No authenticated user'
-            ], 401);
-        }
+    abort_unless($profile, 403, 'Only providers have client analytics');
 
-        $profile = $user->providerProfile;
+    $totalClients = $profile->clients()->count();
 
-        if (!$profile) {
-            return response()->json([
-                'error' => 'User has no provider profile',
-                'user_id' => $user->id,
-            ], 403);
-        }
+    $newClientsThisMonth = $profile->clients()
+        ->wherePivot('created_at', '>=', now()->startOfMonth())
+        ->count();
 
-        // TEST 1
-        $totalClients = $profile->clients()->count();
+    // A repeat client is one with more than one completed appointment
+    // with this specific provider.
+    $repeatClientIds = $profile->appointments()
+        ->where('status', 'completed')
+        ->select('client_id')
+        ->selectRaw('COUNT(*) as visits')
+        ->groupBy('client_id')
+        ->havingRaw('COUNT(*) > 1')
+        ->pluck('client_id');
 
-        // TEST 2
-        $newClientsThisMonth = $profile->clients()
-            ->wherePivot('created_at', '>=', now()->startOfMonth())
-            ->count();
+    $completedAppointments = $profile->appointments()
+        ->where('status', 'completed')
+        ->count();
 
-        // TEST 3
-        $completedAppointments = $profile->appointments()
-            ->where('status', 'completed')
-            ->count();
+    $days = max(
+        1,
+        min((int) $request->input('days', 30), 180)
+    );
 
-        // TEST 4
-        $repeatClientIds = $profile->appointments()
-            ->where('status', 'completed')
-            ->select('client_id')
-            ->selectRaw('COUNT(*) as visits')
-            ->groupBy('client_id')
-            ->havingRaw('COUNT(*) > 1')
-            ->pluck('client_id');
+    $start = now()
+        ->subDays($days - 1)
+        ->startOfDay();
 
-        // TEST 5
-        $days = max(1, min((int) $request->input('days', 30), 180));
+    /*
+     * Get client creation dates without using a raw DATE()/GROUP BY
+     * expression. This avoids database-specific SQL problems.
+     */
+    $clientRows = $profile->clients()
+        ->wherePivot('created_at', '>=', $start)
+        ->get();
 
-        $start = now()
-            ->subDays($days - 1)
-            ->startOfDay();
+    $countsByDate = $clientRows
+        ->groupBy(function ($client) {
+            return \Carbon\Carbon::parse(
+                $client->pivot->created_at
+            )->toDateString();
+        })
+        ->map(fn ($clients) => $clients->count());
 
-        $rows = $profile->clients()
-            ->wherePivot('created_at', '>=', $start)
-            ->get();
+    $labels = collect(range(0, $days - 1))
+        ->map(fn ($i) => $start->copy()->addDays($i)->toDateString())
+        ->values();
 
-        return response()->json([
-            'success' => true,
-            'debug' => [
-                'user_id' => $user->id,
-                'provider_profile_id' => $profile->id,
-                'total_clients' => $totalClients,
-                'new_clients_this_month' => $newClientsThisMonth,
-                'completed_appointments' => $completedAppointments,
-                'repeat_clients' => $repeatClientIds->count(),
-                'recent_clients' => $rows->count(),
-            ],
-        ]);
+    $values = $labels
+        ->map(fn ($date) => (int) $countsByDate->get($date, 0))
+        ->values();
 
-    } catch (\Throwable $e) {
-        \Log::error('Provider analytics clients failed', [
-            'message' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-            'trace' => $e->getTraceAsString(),
-        ]);
-
-        return response()->json([
-            'success' => false,
-            'error' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-        ], 500);
-    }
+    return response()->json([
+        'total_clients' => $totalClients,
+        'new_clients_this_month' => $newClientsThisMonth,
+        'repeat_clients' => $repeatClientIds->count(),
+        'repeat_rate' => $totalClients > 0
+            ? round($repeatClientIds->count() / $totalClients, 2)
+            : 0,
+        'completed_appointments' => $completedAppointments,
+        'average_rating' => (float) $profile->average_rating,
+        'reviews_count' => $profile->reviews_count,
+        'new_clients_series' => [
+            'labels' => $labels,
+            'values' => $values,
+        ],
+    ]);
 }
 
 }
