@@ -24,7 +24,8 @@ return [
 
     'allowed_origins' => [ 
     'https://glam-frontend-lemon.vercel.app',
-    'https://glamfrontend.onrender.com'
+    'https://glamfrontend.onrender.com',
+    'http://localhost:5173',
 ],
 
     'allowed_origins_patterns' => [],
