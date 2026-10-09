@@ -50,13 +50,6 @@ Route::prefix('v1')->group(function () {
     Route::get('/providers/{providerProfile}', [ProviderProfileController::class, 'show']);
     Route::get('/providers/{providerProfileId}/services', [ServiceController::class, 'index']);
 
-    // Feaure #5 Push Notifications
-    Route::middleware('signed')->group(function () {
-    Route::get('/appointments/{appointment}/quick-accept', [AppointmentQuickActionController::class, 'accept'])
-        ->name('appointments.quick-accept');
-    Route::get('/appointments/{appointment}/quick-decline', [AppointmentQuickActionController::class, 'decline'])
-        ->name('appointments.quick-decline');
-});
 
     // Lets the frontend know whether the payments system is currently switched on
     Route::get('/system-settings', [SystemSettingsController::class, 'status']);
