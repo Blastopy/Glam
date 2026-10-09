@@ -12,6 +12,25 @@ class AppServiceProvider extends ServiceProvider
         //
     }
 
+    protected function configureRateLimiting(): void
+    {
+        RateLimiter::for('api-role', function (Request $request) {
+            $user = $request->user();
+            $role = $user?->role ?? 'guest';
+
+            $limits = [
+                'admin' => 300,
+                'provider' => 120,
+                'client' => 60,
+                'guest' => 30,
+            ];
+
+            $maxAttempts = $limits[$role] ?? 60;
+
+            return Limit::perMinute($maxAttempts)->by($user?->id ?? $request->ip());
+        });
+    }
+
     public function boot(): void
     {
         // This is an API-only backend with a separate Vue SPA — the password
@@ -24,4 +43,5 @@ class AppServiceProvider extends ServiceProvider
             return "{$frontendUrl}/reset-password?token={$token}&email=" . urlencode($notifiable->getEmailForPasswordReset());
         });
     }
+    
 }

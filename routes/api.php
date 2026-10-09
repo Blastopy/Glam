@@ -66,7 +66,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/payments/mpesa/callback', [PaymentController::class, 'callback']);
 
     // ── Authenticated ───────────────────────────────────────
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'throttle:api-role'])->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
 
