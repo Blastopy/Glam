@@ -61,7 +61,8 @@ class ProviderProfileController extends Controller
 
     public function show(ProviderProfile $providerProfile)
     {
-        abort_if($providerProfile->user?->trashed(), 404, 'Provider profile not found');
+        $user = $providerProfile->user()->withTrashed()->first();
+        abort_if($user?->trashed(), 404, 'Provider profile not found');
 
         $providerProfile->load([
             'services' => fn ($q) => $q->where('is_active', true),

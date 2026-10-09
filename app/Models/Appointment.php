@@ -12,6 +12,8 @@ class Appointment extends Model
 {
     use HasFactory;
 
+    protected $appends = ['provider_suspended', 'provider_suspension_message'];
+
     protected $fillable = [
         'client_id', 'provider_profile_id', 'service_id', 'scheduled_at',
         'checked_in_at', 'price_at_booking', 'deposit_amount', 'is_deposit_paid',
@@ -61,6 +63,28 @@ class Appointment extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function getProviderSuspendedAttribute(): bool
+    {
+        $profile = $this->providerProfile ?? $this->providerProfile()->first();
+
+        if (! $profile) {
+            return false;
+        }
+
+        $user = $profile->user()->withTrashed()->first();
+
+        return $user?->trashed() ?? false;
+    }
+
+    public function getProviderSuspensionMessageAttribute(): ?string
+    {
+        if (! $this->provider_suspended || $this->status !== 'pending') {
+            return null;
+        }
+
+        return 'This provider account has been suspended.';
     }
 
     /** Client marks "on my way / arrived" — feature #1 (name + arrival time shown to provider). */

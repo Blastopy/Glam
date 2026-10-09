@@ -27,7 +27,7 @@ class AppointmentController extends Controller
             $query = $user->appointmentsAsClient()
                 // `review` is eager-loaded so the frontend can tell, per appointment,
                 // whether the client has already rated it — without a second request.
-                ->with(['providerProfile:id,business_name,cover_image', 'service:id,name,price', 'review']);
+                ->with(['providerProfile:id,user_id,business_name,cover_image', 'service:id,name,price', 'review']);
         }
 
         if ($request->filled('status')) {
@@ -55,6 +55,9 @@ class AppointmentController extends Controller
         $service = Service::with('providerProfile')->findOrFail($validated['service_id']);
         $wantsHomeService = $validated['is_home_service'] ?? false;
 
+        $providerUser = $service->providerProfile->user()->withTrashed()->first();
+
+        abort_if($providerUser?->trashed(), 422, 'This provider account has been suspended.');
         abort_if(! $service->providerProfile->is_open, 422, 'This provider is currently closed');
         abort_if(! $service->providerProfile->is_subscription_active, 422, 'This provider is not currently accepting bookings.');
         abort_if($wantsHomeService && ! $service->providerProfile->offers_home_service, 422, 'This provider does not offer home visits.');
