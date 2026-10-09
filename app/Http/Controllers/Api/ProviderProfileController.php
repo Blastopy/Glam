@@ -16,6 +16,7 @@ class ProviderProfileController extends Controller
     public function index(Request $request)
     {
         $query = ProviderProfile::query()
+            ->whereHas('user', fn ($q) => $q->whereNull('deleted_at'))
             ->subscriptionActive() // only providers who've paid the monthly fee are discoverable
             ->featuredFirst() // admin-promoted providers are advertised ahead of others
             ->with(['services' => fn ($q) => $q->where('is_active', true), 'user:id,name,avatar'])
@@ -60,6 +61,8 @@ class ProviderProfileController extends Controller
 
     public function show(ProviderProfile $providerProfile)
     {
+        abort_if($providerProfile->user?->trashed(), 404, 'Provider profile not found');
+
         $providerProfile->load([
             'services' => fn ($q) => $q->where('is_active', true),
             'user:id,name,avatar,phone',
