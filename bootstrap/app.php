@@ -27,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
             'admin' => EnsureUserIsAdmin::class, // required for the admin panel — see ADMIN_SETUP.md
+            
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
