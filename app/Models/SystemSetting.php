@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 class SystemSetting extends Model
 {
@@ -14,12 +15,22 @@ class SystemSetting extends Model
     }
 
     /**
-     * There's only ever one row. Reads always go through this rather than a
-     * raw query, so every caller agrees on "the" settings row without having
-     * to know it's id=1 — and it self-heals if that row is ever missing.
+     * There's only ever one row, read on practically every request (it's
+     * checked inside ProviderProfile::isSubscriptionActive, which runs for
+     * every provider serialized anywhere in the app) — a prime caching
+     * candidate. Cached for 10 minutes, but AdminSettingsController::updatePayments
+     * explicitly busts this immediately on change rather than waiting out the
+     * TTL, so toggling the switch takes effect right away.
      */
     public static function current(): self
     {
-        return static::firstOrCreate(['id' => 1]);
+        return Cache::remember('system_settings', now()->addMinutes(10), function () {
+            return static::firstOrCreate(['id' => 1]);
+        });
+    }
+
+    public static function forgetCache(): void
+    {
+        Cache::forget('system_settings');
     }
 }

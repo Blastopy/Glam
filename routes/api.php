@@ -45,6 +45,7 @@ Route::prefix('v1')->group(function () {
         ->name('appointments.quick-decline');
     });
 
+    Route::middleware('throttle:api')->group(function () {
     // Feature #2 & #6: browse/discover providers + their catalogue, no auth needed
     Route::get('/providers', [ProviderProfileController::class, 'index']);
     Route::get('/providers/{providerProfile}', [ProviderProfileController::class, 'show']);
@@ -57,9 +58,10 @@ Route::prefix('v1')->group(function () {
     // M-Pesa callback — Safaricom hits this server-to-server, must stay outside auth
     // and outside CSRF/VerifyCsrfToken (api group already excludes CSRF by default).
     Route::post('/payments/mpesa/callback', [PaymentController::class, 'callback']);
+    });
 
     // ── Authenticated ───────────────────────────────────────
-    Route::middleware(['auth:sanctum', 'throttle:api-role'])->group(function () {
+    Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
 

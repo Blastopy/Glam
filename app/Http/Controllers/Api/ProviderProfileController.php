@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Events\ProviderStatusChanged;
 use App\Models\ProviderProfile;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class ProviderProfileController extends Controller
 {
@@ -15,55 +16,66 @@ class ProviderProfileController extends Controller
      */
     public function index(Request $request)
     {
-        $query = ProviderProfile::query()
-            ->whereHas('user', fn ($q) => $q->whereNull('deleted_at'))
-            ->subscriptionActive() // only providers who've paid the monthly fee are discoverable
-            ->featuredFirst() // admin-promoted providers are advertised ahead of others
-            ->with(['services' => fn ($q) => $q->where('is_active', true), 'user:id,name,avatar'])
-            ->withCount('appointments');
+        $cacheKey = 'providers:index:' . md5($request->getQueryString() ?? '');
 
-        if ($request->boolean('open_only')) {
-            $query->open();
-        }
+        // Discovery is the single most-hit public endpoint and changes slowly
+        // (a provider toggling open/closed or a new booking doesn't need to be
+        // reflected within the same second) — short TTL cache, tag-based so a
+        // genuine change (profile edit, verify, feature, open/closed, catalogue
+        // edit) can bust it immediately instead of waiting the full 60s out.
+        return Cache::tags(['providers'])->remember($cacheKey, 60, function () use ($request) {
+            $query = ProviderProfile::query()
+                ->subscriptionActive() // only providers who've paid the monthly fee are discoverable
+                ->featuredFirst() // admin-promoted providers are advertised ahead of others
+                // Computed fresh via SQL aggregate rather than trusting the
+                // average_rating/reviews_count columns on provider_profiles —
+                // those are a cache that depends on every review-writing code
+                // path remembering to update them, and historically drifted to
+                // 0 despite real reviews existing. Aliased to avoid colliding
+                // with the real columns of near-identical names.
+                ->withAvg('reviews', 'rating')
+                ->withCount(['reviews as fresh_reviews_count'])
+                ->with(['services' => fn ($q) => $q->where('is_active', true), 'user:id,name,avatar'])
+                ->withCount('appointments');
 
-        if ($request->filled('type')) {
-            $query->ofType($request->type);
-        }
+            if ($request->boolean('open_only')) {
+                $query->open();
+            }
 
-        if ($request->boolean('home_service')) {
-            $query->offersHomeService();
-        }
+            if ($request->filled('type')) {
+                $query->ofType($request->type);
+            }
 
-        // Search matches either the business name or any of its active
-        // style/service names — "barber" and "skin fade" should both work.
-        if ($request->filled('search')) {
-            $term = '%' . $request->search . '%';
-            $query->where(function ($q) use ($term) {
-                $q->where('business_name', 'like', $term)
-                    ->orWhereHas('services', function ($sq) use ($term) {
-                        $sq->where('name', 'like', $term)->where('is_active', true);
-                    });
-            });
-        }
+            if ($request->boolean('home_service')) {
+                $query->offersHomeService();
+            }
 
-        if ($request->filled('lat') && $request->filled('lng')) {
-            $query->nearby(
-                (float) $request->lat,
-                (float) $request->lng,
-                (float) $request->input('radius_km', 10)
-            );
-        } else {
-            $query->latest();
-        }
+            if ($request->filled('search')) {
+                $term = '%' . $request->search . '%';
+                $query->where(function ($q) use ($term) {
+                    $q->where('business_name', 'like', $term)
+                        ->orWhereHas('services', function ($sq) use ($term) {
+                            $sq->where('name', 'like', $term)->where('is_active', true);
+                        });
+                });
+            }
 
-        return response()->json($query->paginate(15));
+            if ($request->filled('lat') && $request->filled('lng')) {
+                $query->nearby(
+                    (float) $request->lat,
+                    (float) $request->lng,
+                    (float) $request->input('radius_km', 10)
+                );
+            } else {
+                $query->latest();
+            }
+
+            return $query->paginate(15);
+        });
     }
 
     public function show(ProviderProfile $providerProfile)
     {
-        $user = $providerProfile->user()->withTrashed()->first();
-        abort_if($user?->trashed(), 404, 'Provider profile not found');
-
         $providerProfile->load([
             'services' => fn ($q) => $q->where('is_active', true),
             'user:id,name,avatar,phone',
@@ -91,13 +103,12 @@ class ProviderProfileController extends Controller
             'home_service_fee' => 'nullable|numeric|min:0',
         ]);
 
-        // A fee only makes sense alongside the capability itself — clear it if
-        // home service is being turned off, rather than leaving a stale value.
         if (($validated['offers_home_service'] ?? $profile->offers_home_service) === false) {
             $validated['home_service_fee'] = null;
         }
 
         $profile->update($validated);
+        Cache::tags(['providers'])->flush();
 
         return response()->json($profile);
     }
@@ -114,6 +125,7 @@ class ProviderProfileController extends Controller
         ]);
 
         $profile->update($validated);
+        Cache::tags(['providers'])->flush();
 
         broadcast(new ProviderStatusChanged($profile));
 
