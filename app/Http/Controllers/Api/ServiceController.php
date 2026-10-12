@@ -59,19 +59,33 @@ class ServiceController extends Controller
 
         if ($request->hasFile('image')) {
             // Replace: remove the old object so R2 storage doesn't accumulate orphans
-            if ($service->image) {
-                Storage::disk('r2')->delete($service->image);
+        //     if ($service->image) {
+        //         Storage::disk('r2')->delete($service->image);
+        //     }
+        //     $validated['image'] = $request->file('image')->store('services', 'r2');
+        // } else {
+        //     // No new file uploaded on this request — don't overwrite the existing image with null
+        //     unset($validated['image']);
+        // }
+
+        // $service->update($validated);
+        // Cache::tags(['providers'])->flush();
+
+        // return response()->json($service);
+        try {
+                $upload = $this->cloudinary->upload($request->file('image'));
+            } catch (RuntimeException $e) {
+                return response()->json(['message' => $e->getMessage()], 422);
             }
-            $validated['image'] = $request->file('image')->store('services', 'r2');
+            $validated['image'] = $upload['url'];
+            $validated['image_public_id'] = $upload['public_id'];
         } else {
-            // No new file uploaded on this request — don't overwrite the existing image with null
-            unset($validated['image']);
+            $validated['image'] = null;
         }
 
-        $service->update($validated);
-        Cache::tags(['providers'])->flush();
+        $service = $profile->services()->create($validated);
 
-        return response()->json($service);
+        return response()->json($service, 201);
     }
 
     public function destroy(Request $request, Service $service)
