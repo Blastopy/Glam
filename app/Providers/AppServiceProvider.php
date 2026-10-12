@@ -48,13 +48,13 @@ class AppServiceProvider extends ServiceProvider
             $user = $request->user();
 
             if (! $user) {
-                return Limit::perMinute(300)->by($request->ip());
+                return Limit::perMinute(30)->by($request->ip());
             }
 
             return match ($user->role) {
                 'admin' => Limit::perMinute(300)->by($user->id),
                 'provider' => Limit::perMinute(120)->by($user->id),
-                default => Limit::perMinute(300)->by($user->id), // client
+                default => Limit::perMinute(60)->by($user->id), // client
             };
         });
     }
