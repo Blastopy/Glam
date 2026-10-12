@@ -54,7 +54,7 @@ class AppServiceProvider extends ServiceProvider
             return match ($user->role) {
                 'admin' => Limit::perMinute(300)->by($user->id),
                 'provider' => Limit::perMinute(120)->by($user->id),
-                default => Limit::perMinute(60)->by($user->id), // client
+                default => Limit::perMinute(300)->by($user->id), // client
             };
         });
     }
