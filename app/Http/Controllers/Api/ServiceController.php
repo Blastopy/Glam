@@ -58,6 +58,7 @@ class ServiceController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
+            // r2 setup when it's ready
             // Replace: remove the old object so R2 storage doesn't accumulate orphans
         //     if ($service->image) {
         //         Storage::disk('r2')->delete($service->image);
