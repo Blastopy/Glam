@@ -33,9 +33,6 @@ RUN composer install \
 # Create SQLite database
 # RUN touch database/database.sqlite
 
-RUN pecl install redis \
-    && docker-php-ext-enable redis
-    
 # Set permissions
 RUN chmod -R 775 storage bootstrap/cache database
 

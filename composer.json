@@ -12,13 +12,11 @@
     "require": {
         "php": "^8.2",
         "guzzlehttp/guzzle": "^7.9",
-        "laravel-notification-channels/webpush": "^13.0",
         "laravel/framework": "^12.0",
+        "laravel-notification-channels/webpush": "^13.0",
         "laravel/reverb": "^1.11",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10",
-        "league/flysystem-aws-s3-v3": "^3.0",
-        "predis/predis": "^3.7",
         "pusher/pusher-php-server": "^7.2"
     },
     "require-dev": {
@@ -60,8 +58,7 @@
         "preferred-install": "dist",
         "sort-packages": true,
         "allow-plugins": {
-            "pestphp/pest-plugin": true,
-            "php-http/discovery": true
+            "pestphp/pest-plugin": true
         }
     },
     "minimum-stability": "stable",

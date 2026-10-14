@@ -5,16 +5,12 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ProviderProfile;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 
 class AdminProviderController extends Controller
 {
     public function index(Request $request)
     {
-        $query = ProviderProfile::query()
-            ->with('user:id,name,email,phone')
-            ->withAvg('reviews', 'rating')
-            ->withCount(['reviews as fresh_reviews_count']);
+        $query = ProviderProfile::query()->with('user:id,name,email,phone');
 
         if ($request->filled('type')) {
             $query->where('provider_type', $request->type);
@@ -46,7 +42,6 @@ class AdminProviderController extends Controller
     public function verify(ProviderProfile $providerProfile)
     {
         $providerProfile->update(['is_verified' => true]);
-        Cache::tags(['providers'])->flush();
 
         return response()->json($providerProfile);
     }
@@ -54,15 +49,14 @@ class AdminProviderController extends Controller
     public function unverify(ProviderProfile $providerProfile)
     {
         $providerProfile->update(['is_verified' => false]);
-        Cache::tags(['providers'])->flush();
 
         return response()->json($providerProfile);
     }
 
+    /** Featured providers are advertised ahead of others in public discovery. */
     public function feature(ProviderProfile $providerProfile)
     {
         $providerProfile->update(['is_featured' => true]);
-        Cache::tags(['providers'])->flush();
 
         return response()->json($providerProfile);
     }
@@ -70,7 +64,6 @@ class AdminProviderController extends Controller
     public function unfeature(ProviderProfile $providerProfile)
     {
         $providerProfile->update(['is_featured' => false]);
-        Cache::tags(['providers'])->flush();
 
         return response()->json($providerProfile);
     }
