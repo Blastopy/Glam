@@ -26,4 +26,6 @@ return [
     // Flat monthly fee a provider pays to be listed and accept bookings.
     'provider_subscription_fee' => (float) env('MPESA_PROVIDER_SUBSCRIPTION_FEE', 1),
     'provider_subscription_days' => (int) env('MPESA_PROVIDER_SUBSCRIPTION_DAYS', 30),
+    'marketplace_daily_rate' => (float) env('MPESA_MARKETPLACE_DAILY_RATE', 100),
+
 ];

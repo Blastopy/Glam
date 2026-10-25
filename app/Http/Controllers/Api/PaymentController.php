@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Events\DepositConfirmed;
 use App\Models\Appointment;
 use App\Models\Payment;
+use App\Models\ProductListingPayment;
 use App\Models\ProviderSubscriptionPayment;
 use App\Services\MpesaService;
 use Illuminate\Http\Request;
@@ -19,9 +20,8 @@ class PaymentController extends Controller
 
     /**
      * Booking deposits are currently disabled — clients book without paying up
-     * front, and providers confirm manually instead. The endpoint and its
-     * underlying model/table are left in place (not deleted) in case this is
-     * re-enabled later; it just refuses to start a new charge for now.
+     * front, and providers confirm manually instead. Left in place (not
+     * deleted) in case this is re-enabled later.
      */
     public function initiateDeposit(Request $request, Appointment $appointment)
     {
@@ -32,9 +32,12 @@ class PaymentController extends Controller
 
     /**
      * Public webhook — Safaricom calls this asynchronously with the result.
-     * No auth middleware; verify by matching CheckoutRequestID instead.
-     * Handles both appointment-deposit payments and provider subscription
-     * payments, since both flows share this one callback URL.
+     * No auth middleware; verified by matching CheckoutRequestID instead.
+     * Handles THREE payment types sharing this one callback URL, disambiguated
+     * by which table the checkout_request_id is found in: appointment deposits
+     * (Payment — currently unused since deposits are disabled), provider
+     * subscriptions (ProviderSubscriptionPayment), and marketplace listings
+     * (ProductListingPayment, added most recently).
      */
     public function callback(Request $request)
     {
@@ -71,11 +74,7 @@ class PaymentController extends Controller
             ]);
 
             if ($success && $payment->type === 'deposit') {
-                $payment->appointment->update([
-                    'is_deposit_paid' => true,
-                    'status' => 'confirmed',
-                ]);
-
+                $payment->appointment->update(['is_deposit_paid' => true, 'status' => 'confirmed']);
                 broadcast(new DepositConfirmed($payment));
             }
 
@@ -105,12 +104,35 @@ class PaymentController extends Controller
             return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
         }
 
+        $listingPayment = ProductListingPayment::where('checkout_request_id', $checkoutRequestId)->first();
+
+        if ($listingPayment) {
+            if ($success) {
+                $listingPayment->update([
+                    'result_code' => $resultCode,
+                    'result_desc' => $payload['ResultDesc'] ?? null,
+                    'mpesa_receipt_number' => $receipt,
+                    'raw_callback' => $payload,
+                ]);
+                ProductListingController::markSuccessful($listingPayment);
+            } else {
+                $listingPayment->update([
+                    'status' => 'failed',
+                    'result_code' => $resultCode,
+                    'result_desc' => MpesaService::friendlyResultMessage($resultCode, $payload['ResultDesc'] ?? null),
+                    'raw_callback' => $payload,
+                ]);
+            }
+
+            return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
+        }
+
         Log::warning('M-Pesa callback for unknown payment', ['checkout_request_id' => $checkoutRequestId]);
 
         return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Ignored — unknown transaction']);
     }
 
-    /** Client-side polling fallback while waiting on the async callback (appointment deposits only — currently unused since deposits are disabled). */
+    /** Client-side polling fallback for appointment deposits (currently unused since deposits are disabled). */
     public function status(Request $request, Payment $payment)
     {
         abort_unless($payment->client_id === $request->user()->id, 403);
@@ -122,7 +144,6 @@ class PaymentController extends Controller
                 $payment->update(['status' => 'successful', 'paid_at' => now()]);
                 $payment->appointment->update(['is_deposit_paid' => true, 'status' => 'confirmed']);
             } elseif (isset($query['ResultCode']) && $query['ResultCode'] !== null && $query['ResultCode'] !== '1032') {
-                // 1032 = request still being processed / cancelled by user check separately
                 $payment->update(['status' => 'failed', 'result_desc' => $query['ResultDesc'] ?? null]);
             }
         }

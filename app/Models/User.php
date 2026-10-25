@@ -32,7 +32,6 @@ class User extends Authenticatable
         ];
     }
 
-    // ── Role helpers ──────────────────────────────────────
     public function isProvider(): bool
     {
         return $this->role === 'provider';
@@ -43,15 +42,11 @@ class User extends Authenticatable
         return $this->role === 'client';
     }
 
-    // ── Relationships ─────────────────────────────────────
-
-    /** If this user is a provider, their business profile. */
     public function providerProfile(): HasOne
     {
         return $this->hasOne(ProviderProfile::class);
     }
 
-    /** Appointments this user booked as a client. */
     public function appointmentsAsClient(): HasMany
     {
         return $this->hasMany(Appointment::class, 'client_id');
@@ -67,7 +62,6 @@ class User extends Authenticatable
         return $this->hasMany(Message::class, 'receiver_id');
     }
 
-    /** Providers this client has booked with / been added by (feature #7). */
     public function providers(): BelongsToMany
     {
         return $this->belongsToMany(ProviderProfile::class, 'client_provider', 'client_id', 'provider_profile_id')
@@ -78,5 +72,11 @@ class User extends Authenticatable
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class, 'client_id');
+    }
+
+    /** Marketplace listings this user is selling — any role can list a product. */
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
     }
 }

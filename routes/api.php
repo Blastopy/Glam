@@ -19,6 +19,9 @@ use App\Http\Controllers\Api\Admin\AdminProviderController;
 use App\Http\Controllers\Api\Admin\AdminSettingsController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\ProductListingController;
+use App\Http\Controllers\Api\Admin\AdminProductController;
 
 /*
 |--------------------------------------------------------------------------
@@ -50,6 +53,9 @@ Route::prefix('v1')->group(function () {
     Route::get('/providers/{providerProfile}', [ProviderProfileController::class, 'show']);
     Route::get('/providers/{providerProfileId}/services', [ServiceController::class, 'index']);
 
+    Route::get('/products', [ProductController::class, 'index']);
+    Route::get('/products/{product}', [ProductController::class, 'show']);
+
 
     // Lets the frontend know whether the payments system is currently switched on
     Route::get('/system-settings', [SystemSettingsController::class, 'status']);
@@ -71,6 +77,15 @@ Route::prefix('v1')->group(function () {
         Route::post('/services', [ServiceController::class, 'store']);
         Route::patch('/services/{service}', [ServiceController::class, 'update']);
         Route::delete('/services/{service}', [ServiceController::class, 'destroy']);
+
+        Route::post('/products', [ProductController::class, 'store']);
+        Route::get('/my-products', [ProductController::class, 'mine']);
+        Route::patch('/products/{product}', [ProductController::class, 'update']);
+        Route::delete('/products/{product}', [ProductController::class, 'destroy']);
+
+        Route::get('/products/{product}/listing', [ProductListingController::class, 'status']);
+        Route::post('/products/{product}/listing/pay', [ProductListingController::class, 'initiate']);
+        Route::get('/products/listing-payments/{payment}/poll', [ProductListingController::class, 'poll']);
 
         // Feature #4: booking
         Route::get('/appointments', [AppointmentController::class, 'index']);
@@ -118,6 +133,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/analytics/bookings', [AdminAnalyticsController::class, 'bookingsSeries']);
             Route::get('/analytics/user-growth', [AdminAnalyticsController::class, 'userGrowthSeries']);
             Route::get('/analytics/top-providers', [AdminAnalyticsController::class, 'topProviders']);
+
+            Route::get('/marketplace', [AdminProductController::class, 'index']);
+Route::patch('/marketplace/{product}/deactivate', [AdminProductController::class, 'deactivate']);
+Route::patch('/marketplace/{product}/reactivate', [AdminProductController::class, 'reactivate']);
             
 
             Route::get('/users', [AdminUserController::class, 'index']);
@@ -138,6 +157,8 @@ Route::prefix('v1')->group(function () {
             // System-wide payments kill switch
             Route::get('/settings', [AdminSettingsController::class, 'show']);
             Route::patch('/settings/payments', [AdminSettingsController::class, 'updatePayments']);
+
+            Route::patch('/settings/marketplace-payments', [AdminSettingsController::class, 'updateMarketplacePayments']);
         });
     });
 });

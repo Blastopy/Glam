@@ -27,3 +27,6 @@ Broadcast::channel('conversation.{userA}.{userB}', function ($user, $userA, $use
 Broadcast::channel('client.{userId}', function ($user, $userId) {
     return $user->id === (int) $userId;
 });
+Broadcast::channel('user.{userId}', function ($user, $userId) {
+    return $user->id === (int) $userId;
+});
