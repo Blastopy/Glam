@@ -132,13 +132,13 @@ Route::prefix('v1')->group(function () {
             Route::get('/analytics/overview', [AdminAnalyticsController::class, 'overview']);
             Route::get('/analytics/revenue', [AdminAnalyticsController::class, 'revenueSeries']);
             Route::get('/analytics/subscription-payments', [AdminAnalyticsController::class, 'subscriptionPaymentsSeries']);
-            Route::get('/analytics/bookings', [AdminAppointmentController::class, 'index']);
+            Route::get('/analytics/bookings', [AdminAnalyticsController::class, 'bookingsSeries']);
             Route::get('/analytics/user-growth', [AdminAnalyticsController::class, 'userGrowthSeries']);
             Route::get('/analytics/top-providers', [AdminAnalyticsController::class, 'topProviders']);
 
             Route::get('/marketplace', [AdminProductController::class, 'index']);
             Route::patch('/marketplace/{product}/deactivate', [AdminProductController::class, 'deactivate']);
-            Route::patch('/marketplace/{product}/reactivate', [AdminProductController::class, 'reactivate');
+            Route::patch('/marketplace/{product}/reactivate', [AdminProductController::class, 'reactivate']);
 
 
             Route::get('/users', [AdminUserController::class, 'index']);
