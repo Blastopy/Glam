@@ -1,10 +1,10 @@
 <?php
 
-namespace App\\Http\\Controllers\\Api;
+namespace App\Http\Controllers\Api;
 
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\Mail;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class ContactController extends Controller
 {
@@ -25,7 +25,6 @@ class ContactController extends Controller
         $subject = trim($validated['subject']);
         $messageBody = trim($validated['message']);
 
-        // Send the enquiry to Flair Place. Replying to this email will reach the visitor.
         Mail::raw(
             "A new message has been submitted through the Glam contact form.\n\n"
             . "Full name: {$name}\n"
@@ -39,7 +38,6 @@ class ContactController extends Controller
             }
         );
 
-        // Acknowledge receipt to the visitor.
         Mail::raw(
             "Hello {$name},\n\n"
             . "Thank you for contacting Flair Place. We have received your message "
