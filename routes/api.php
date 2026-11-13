@@ -1,27 +1,28 @@
 <?php
 
-use App\Http\Controllers\Api\AppointmentController;
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\ClientBookController;
-use App\Http\Controllers\Api\MessageController;
-use App\Http\Controllers\Api\PaymentController;
-use App\Http\Controllers\Api\ProviderSubscriptionController;
-use App\Http\Controllers\Api\ProviderProfileController;
-use App\Http\Controllers\Api\ProviderAnalyticsController;
-use App\Http\Controllers\Api\PushSubscriptionController;
-use App\Http\Controllers\Api\AppointmentQuickActionController;
-use App\Http\Controllers\Api\ReviewController;
-use App\Http\Controllers\Api\ServiceController;
-use App\Http\Controllers\Api\SystemSettingsController;
-use App\Http\Controllers\Api\Admin\AdminAnalyticsController;
-use App\Http\Controllers\Api\Admin\AdminAppointmentController;
-use App\Http\Controllers\Api\Admin\AdminProviderController;
-use App\Http\Controllers\Api\Admin\AdminSettingsController;
-use App\Http\Controllers\Api\Admin\AdminUserController;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\ProductController;
-use App\Http\Controllers\Api\ProductListingController;
-use App\Http\Controllers\Api\Admin\AdminProductController;
+use App\\Http\\Controllers\\Api\\AppointmentController;
+use App\\Http\\Controllers\\Api\\AuthController;
+use App\\Http\\Controllers\\Api\\ClientBookController;
+use App\\Http\\Controllers\\Api\\MessageController;
+use App\\Http\\Controllers\\Api\\PaymentController;
+use App\\Http\\Controllers\\Api\\ProviderSubscriptionController;
+use App\\Http\\Controllers\\Api\\ProviderProfileController;
+use App\\Http\\Controllers\\Api\\ProviderAnalyticsController;
+use App\\Http\\Controllers\\Api\\PushSubscriptionController;
+use App\\Http\\Controllers\\Api\\AppointmentQuickActionController;
+use App\\Http\\Controllers\\Api\\ReviewController;
+use App\\Http\\Controllers\\Api\\ServiceController;
+use App\\Http\\Controllers\\Api\\SystemSettingsController;
+use App\\Http\\Controllers\\Api\\ContactController;
+use App\\Http\\Controllers\\Api\\Admin\\AdminAnalyticsController;
+use App\\Http\\Controllers\\Api\\Admin\\AdminAppointmentController;
+use App\\Http\\Controllers\\Api\\Admin\\AdminProviderController;
+use App\\Http\\Controllers\\Api\\Admin\\AdminSettingsController;
+use App\\Http\\Controllers\\Api\\Admin\\AdminUserController;
+use Illuminate\\Support\\Facades\\Route;
+use App\\Http\\Controllers\\Api\\ProductController;
+use App\\Http\\Controllers\\Api\\ProductListingController;
+use App\\Http\\Controllers\\Api\\Admin\\AdminProductController;
 
 /*
 |--------------------------------------------------------------------------
@@ -39,6 +40,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/google', [AuthController::class, 'google'])->middleware('throttle:10,1');
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
     Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1');
+    Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1');
 
     // Feature #5: quick Accept/Decline buttons in the push notification
     Route::middleware('signed')->group(function () {
@@ -123,21 +125,21 @@ Route::prefix('v1')->group(function () {
         Route::post('/provider/subscription/pay', [ProviderSubscriptionController::class, 'initiate']);
         Route::get('/provider/subscription/{payment}/poll', [ProviderSubscriptionController::class, 'poll']);
         Route::get('/provider/analytics/clients', [ProviderAnalyticsController::class, 'clients']);
-        
+
 
         // ── Admin panel ───────────────────────────────────
         Route::middleware('admin')->prefix('admin')->group(function () {
             Route::get('/analytics/overview', [AdminAnalyticsController::class, 'overview']);
             Route::get('/analytics/revenue', [AdminAnalyticsController::class, 'revenueSeries']);
             Route::get('/analytics/subscription-payments', [AdminAnalyticsController::class, 'subscriptionPaymentsSeries']);
-            Route::get('/analytics/bookings', [AdminAnalyticsController::class, 'bookingsSeries']);
+            Route::get('/analytics/bookings', [AdminAppointmentController::class, 'index']);
             Route::get('/analytics/user-growth', [AdminAnalyticsController::class, 'userGrowthSeries']);
             Route::get('/analytics/top-providers', [AdminAnalyticsController::class, 'topProviders']);
 
             Route::get('/marketplace', [AdminProductController::class, 'index']);
-Route::patch('/marketplace/{product}/deactivate', [AdminProductController::class, 'deactivate']);
-Route::patch('/marketplace/{product}/reactivate', [AdminProductController::class, 'reactivate']);
-            
+            Route::patch('/marketplace/{product}/deactivate', [AdminProductController::class, 'deactivate']);
+            Route::patch('/marketplace/{product}/reactivate', [AdminProductController::class, 'reactivate');
+
 
             Route::get('/users', [AdminUserController::class, 'index']);
             Route::get('/users/{id}', [AdminUserController::class, 'show']);
