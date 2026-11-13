@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\AppointmentQuickActionController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\SystemSettingsController;
+use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\Admin\AdminAnalyticsController;
 use App\Http\Controllers\Api\Admin\AdminAppointmentController;
 use App\Http\Controllers\Api\Admin\AdminProviderController;
@@ -39,6 +40,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/google', [AuthController::class, 'google'])->middleware('throttle:10,1');
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
     Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1');
+    Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:5,1');
 
     // Feature #5: quick Accept/Decline buttons in the push notification
     Route::middleware('signed')->group(function () {
