@@ -20,7 +20,10 @@ class ProviderProfileController extends Controller
             ->subscriptionActive() // only providers who've paid the monthly fee are discoverable
             ->featuredFirst() // admin-promoted providers are advertised ahead of others
             ->with(['services' => fn ($q) => $q->where('is_active', true), 'user:id,name,avatar'])
-            ->withCount('appointments');
+            ->withCount('appointments')
+            // Calculate ratings directly from reviews for accurate discovery cards.
+            ->withAvg('reviews', 'rating')
+            ->withCount(['reviews as fresh_reviews_count']);
 
         if ($request->boolean('open_only')) {
             $query->open();
